@@ -38,15 +38,49 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.log('✅ Supabase credentials found! Initializing client...');
 }
 
-// Create Supabase client
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
-  auth: {
-    storage: undefined, // We'll use AsyncStorage instead
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+// Create Supabase client only if credentials are available
+// If not configured, create a client with a valid-format URL that will fail gracefully
+// The SupabaseStorageService will check isConfigured() before using it
+let supabaseClient: ReturnType<typeof createClient>;
+
+if (supabaseUrl && supabaseAnonKey && supabaseUrl.length > 0 && supabaseAnonKey.length > 0) {
+  try {
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: undefined, // We'll use AsyncStorage instead
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    });
+  } catch (error) {
+    console.error('Error creating Supabase client:', error);
+    // Fallback: Create client with minimal config that won't crash
+    // Use a valid URL format to pass validation, but it won't work for actual operations
+    supabaseClient = createClient('https://not-configured.supabase.co', 'not-configured-key', {
+      auth: {
+        storage: undefined,
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    });
+  }
+} else {
+  // No credentials: Create a client with a valid-format URL that passes validation
+  // Actual operations will fail, but initialization won't crash
+  // The SupabaseStorageService checks isConfigured() before using it
+  supabaseClient = createClient('https://not-configured.supabase.co', 'not-configured-key', {
+    auth: {
+      storage: undefined,
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+export const supabase = supabaseClient;
 
 // Connection test function
 export interface SupabaseConnectionStatus {

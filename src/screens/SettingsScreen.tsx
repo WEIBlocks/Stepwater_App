@@ -204,7 +204,7 @@ const SettingsScreen: React.FC = () => {
               <View style={styles.settingInfo}>
                 <Text style={styles.settingTitle}>Step Goal</Text>
                 <Text style={styles.settingDescription}>
-                  {stepGoal.toLocaleString()} steps per day
+                  {String(stepGoal)} steps per day
                 </Text>
               </View>
               <Text style={styles.chevron}>›</Text>

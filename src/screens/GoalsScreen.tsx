@@ -113,7 +113,7 @@ const GoalsScreen: React.FC = () => {
                     parseInt(localStepGoal, 10) === value && styles.quickButtonTextActive,
                   ]}
                 >
-                  {value / 1000}K
+                  {String(value)}
                 </Text>
               </TouchableOpacity>
             ))}

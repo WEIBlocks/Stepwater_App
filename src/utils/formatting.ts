@@ -1,22 +1,16 @@
 export const formatSteps = (steps: number): string => {
-  if (steps >= 1000000) {
-    return `${(steps / 1000000).toFixed(1)}M`;
-  }
-  if (steps >= 1000) {
-    return `${(steps / 1000).toFixed(1)}K`;
-  }
-  return steps.toString();
+  // Return exact number without compact notation (e.g., 1000 stays 1000, not 1.0K)
+  return String(steps);
 };
 
 export const formatWater = (ml: number, unit: 'metric' | 'imperial'): string => {
   if (unit === 'imperial') {
-    const oz = ml / 29.5735;
-    return `${Math.round(oz)} oz`;
+    // Convert to ounces for imperial unit, but show exact number
+    const oz = Math.round(ml / 29.5735);
+    return `${String(oz)} oz`;
   }
-  if (ml >= 1000) {
-    return `${(ml / 1000).toFixed(1)}L`;
-  }
-  return `${Math.round(ml)} ml`;
+  // Return exact number in ml without compact notation (e.g., 1000 stays 1000 ml, not 1.0L)
+  return `${String(Math.round(ml))} ml`;
 };
 
 export const formatDistance = (meters: number, unit: 'metric' | 'imperial'): string => {

@@ -2,11 +2,15 @@ import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Platform, AppState } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
 import ErrorBoundary from './src/utils/errorBoundary';
 import { useStore } from './src/state/store';
 import { usePedometer } from './src/hooks/usePedometer';
 import { useHydration } from './src/hooks/useHydration';
+import { ForegroundServiceManager } from './src/services/foregroundServiceManager';
+// Import notification handler early to ensure it's registered before any notifications
+import './src/services/notifications';
 
 // Initialize app hooks
 const AppContent = () => {
@@ -50,6 +54,23 @@ const AppContent = () => {
             // Ignore import/connection errors
           }
         }, 2000);
+
+        // Start foreground service IMMEDIATELY (Android only)
+        // This ensures the notification appears as soon as the app launches
+        // Wrap in try-catch to prevent crashes if service fails to start
+        if (Platform.OS === 'android') {
+          // Start immediately after data loads (no delay)
+          // Use setTimeout to ensure it doesn't block app initialization
+          setTimeout(async () => {
+            try {
+              await ForegroundServiceManager.start();
+            } catch (error) {
+              // Log error but don't crash the app
+              console.error('Error starting foreground service:', error);
+              // App will continue to work without foreground service
+            }
+          }, 500);
+        }
       } catch (error) {
         console.error('Error initializing app:', error);
       } finally {
@@ -70,6 +91,32 @@ const AppContent = () => {
   // Initialize pedometer and hydration tracking (these are non-blocking)
   usePedometer();
   useHydration();
+
+  // Handle app state changes to restart foreground service if needed
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        // App came to foreground - ensure service is running
+        setTimeout(async () => {
+          if (!ForegroundServiceManager.isServiceRunning()) {
+            try {
+              await ForegroundServiceManager.start();
+            } catch (error) {
+              console.error('Error restarting foreground service on app resume:', error);
+            }
+          }
+        }, 1000);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   return <AppNavigator />;
 };

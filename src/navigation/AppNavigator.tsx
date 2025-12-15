@@ -131,7 +131,7 @@ const AppNavigator = () => {
   const loadSettings = useStore((state) => state.loadSettings);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [hasCompletedProfile, setHasCompletedProfile] = useState(false);
-  const [selectedGender, setSelectedGender] = useState<Gender | 'skipped'>('pending');
+  const [selectedGender, setSelectedGender] = useState<Gender | 'skipped' | 'pending'>('pending');
   const [isLoading, setIsLoading] = useState(true);
   const navigationRef = useNavigationContainerRef();
 
@@ -190,13 +190,17 @@ const AppNavigator = () => {
   // Navigate to GenderSelection when onboarding completes
   useEffect(() => {
     if (!isLoading && navigationRef.isReady() && hasCompletedOnboarding && !hasCompletedProfile && selectedGender === 'pending') {
-      // When onboarding completes, navigate to GenderSelection
+      // When onboarding completes, reset navigation to GenderSelection
       // Use a small delay to ensure state is updated
       const timer = setTimeout(() => {
         try {
-          navigationRef.navigate('GenderSelection');
+          // Reset navigation stack to ensure clean flow and prevent going back
+          navigationRef.reset({
+            index: 0,
+            routes: [{ name: 'GenderSelection' }],
+          });
         } catch (error) {
-          // Navigation might fail if screen is not in stack yet, that's okay
+          console.warn('Navigation to GenderSelection failed:', error);
           // The conditional rendering will handle it
         }
       }, 100);
@@ -207,13 +211,17 @@ const AppNavigator = () => {
   // Navigate to ProfileSetup when gender is selected or skipped
   useEffect(() => {
     if (!isLoading && navigationRef.isReady() && hasCompletedOnboarding && !hasCompletedProfile && selectedGender !== 'pending') {
-      // When gender is selected or skipped, navigate to ProfileSetup
+      // When gender is selected or skipped, reset navigation to ProfileSetup
       // Use a small delay to ensure state is updated
       const timer = setTimeout(() => {
         try {
-          navigationRef.navigate('ProfileSetup');
+          // Reset navigation stack to ensure clean flow and prevent going back
+          navigationRef.reset({
+            index: 0,
+            routes: [{ name: 'ProfileSetup' }],
+          });
         } catch (error) {
-          // Navigation might fail if screen is not in stack yet, that's okay
+          console.warn('Navigation to ProfileSetup failed:', error);
           // The conditional rendering will handle it
         }
       }, 100);
@@ -247,11 +255,16 @@ const AppNavigator = () => {
         console.warn('Failed to load settings:', error);
       }
 
+      // Default to false for new users (if storage read fails or returns null)
       const onboarding = onboardingCompleted.status === 'fulfilled' ? onboardingCompleted.value : false;
       const profile = profileCompleted.status === 'fulfilled' ? profileCompleted.value : false;
 
-      setHasCompletedOnboarding(onboarding);
-      setHasCompletedProfile(profile);
+      // Ensure new users always start at onboarding
+      // Only set to true if explicitly marked as completed
+      setHasCompletedOnboarding(onboarding === true);
+      setHasCompletedProfile(profile === true);
+      
+      // Reset gender selection state based on completion status
       if (!profile && onboarding) {
         setSelectedGender('pending'); // Need to show gender selection
       } else if (!onboarding) {
@@ -259,7 +272,7 @@ const AppNavigator = () => {
       }
     } catch (error) {
       console.error('Error in checkSetup:', error);
-      // Set defaults on error
+      // Set defaults on error - new users should start at onboarding
       setHasCompletedOnboarding(false);
       setHasCompletedProfile(false);
       setSelectedGender('pending');
@@ -284,6 +297,20 @@ const AppNavigator = () => {
   const handleProfileComplete = async (profile: UserProfile) => {
     await StorageService.saveProfile(profile);
     setHasCompletedProfile(true);
+    // Navigate to Main (HomeScreen) after profile is completed
+    // Use a small delay to ensure state is updated
+    setTimeout(() => {
+      if (navigationRef.isReady()) {
+        try {
+          navigationRef.reset({
+            index: 0,
+            routes: [{ name: 'Main' }],
+          });
+        } catch (error) {
+          console.warn('Navigation to Main after profile completion failed:', error);
+        }
+      }
+    }, 100);
   };
 
   if (isLoading) {
@@ -307,16 +334,37 @@ const AppNavigator = () => {
   return (
     <NavigationContainer
       ref={navigationRef}
+      onReady={() => {
+        // Ensure navigation is locked to the correct route based on completion status
+        if (!hasCompletedOnboarding || !hasCompletedProfile) {
+          const initialRoute = getInitialRouteName();
+          if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name !== initialRoute) {
+            navigationRef.reset({
+              index: 0,
+              routes: [{ name: initialRoute }],
+            });
+          }
+        }
+      }}
     >
       <Stack.Navigator 
-        screenOptions={{ headerShown: false }}
+        screenOptions={{ 
+          headerShown: false,
+          // Prevent going back during onboarding flow
+          gestureEnabled: hasCompletedOnboarding && hasCompletedProfile,
+        }}
         initialRouteName={getInitialRouteName()}
       >
         {/* Always include Main in the stack for smooth navigation */}
         <Stack.Screen name="Main" component={TabNavigator} />
         
         {!hasCompletedOnboarding ? (
-          <Stack.Screen name="Onboarding">
+          <Stack.Screen 
+            name="Onboarding"
+            options={{
+              gestureEnabled: false, // Prevent swipe back during onboarding
+            }}
+          >
             {(props) => (
               <OnboardingScreen
                 {...props}
@@ -326,7 +374,12 @@ const AppNavigator = () => {
           </Stack.Screen>
         ) : !hasCompletedProfile ? (
           selectedGender === 'pending' ? (
-            <Stack.Screen name="GenderSelection">
+            <Stack.Screen 
+              name="GenderSelection"
+              options={{
+                gestureEnabled: false, // Prevent going back to onboarding
+              }}
+            >
               {(props) => (
                 <GenderSelectionScreen
                   {...props}
@@ -336,7 +389,12 @@ const AppNavigator = () => {
               )}
             </Stack.Screen>
           ) : (
-            <Stack.Screen name="ProfileSetup">
+            <Stack.Screen 
+              name="ProfileSetup"
+              options={{
+                gestureEnabled: false, // Prevent going back during setup
+              }}
+            >
               {(props) => (
                 <ProfileSetupScreen
                   {...props}

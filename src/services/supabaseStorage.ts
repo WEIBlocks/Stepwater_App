@@ -11,11 +11,28 @@ export class SupabaseStorageService {
   private static isConfigured(): boolean {
     // Check if Supabase is properly configured
     try {
-      const url = process.env.EXPO_PUBLIC_SUPABASE_URL || 
-                  (typeof __DEV__ !== 'undefined' ? (global as any).EXPO_PUBLIC_SUPABASE_URL : '');
-      const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
-                  (typeof __DEV__ !== 'undefined' ? (global as any).EXPO_PUBLIC_SUPABASE_ANON_KEY : '');
-      return !!(url && key && url.length > 0 && key.length > 0);
+      // Use Constants.expoConfig for production builds, fallback to process.env
+      let url = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      let key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+      
+      // Try to get from expo-constants if available (production builds)
+      try {
+        const Constants = require('expo-constants').default;
+        if (Constants?.expoConfig?.extra?.supabaseUrl) {
+          url = Constants.expoConfig.extra.supabaseUrl;
+        }
+        if (Constants?.expoConfig?.extra?.supabaseAnonKey) {
+          key = Constants.expoConfig.extra.supabaseAnonKey;
+        }
+      } catch {
+        // Constants might not be available, use process.env
+      }
+      
+      // Validate that we have real credentials (not placeholder)
+      const hasValidUrl = url && url.length > 0 && !url.includes('placeholder') && !url.includes('not-configured');
+      const hasValidKey = key && key.length > 0 && !key.includes('placeholder') && !key.includes('not-configured');
+      
+      return hasValidUrl && hasValidKey;
     } catch {
       return false;
     }

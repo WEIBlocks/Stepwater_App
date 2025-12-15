@@ -523,7 +523,7 @@ const HomeScreen: React.FC = () => {
                 style={styles.lifetimeCard}
                 activeOpacity={0.8}
               >
-                <Text style={styles.lifetimeIcon}>🌊</Text>
+                <Ionicons name="wine" size={rf(28)} color={theme.colors.water} style={styles.lifetimeIcon} />
                 <View style={styles.lifetimeContent}>
                   <Text style={styles.lifetimeLabel}>Total Water</Text>
                   <Text style={styles.lifetimeValue}>
@@ -983,12 +983,20 @@ const styles = StyleSheet.create({
     marginBottom: rm(18),
   },
   streakCard: {
-    flex: 1,
+    flexBasis: '48%',
+    minWidth: '47%',
+    minHeight: rp(90),
     borderRadius: theme.borderRadius.card,
-    padding: rp(20),
+    paddingVertical: rp(2),
+    paddingHorizontal: rp(3),
     flexDirection: 'row',
     alignItems: 'center',
+    columnGap: rp(2),
+    rowGap: rp(2),
     backgroundColor: theme.colors.card,
+    flexWrap: 'wrap',
+    // Keep children in a single horizontal line where possible
+    justifyContent: 'center',
   },
   streakCardNeumorphic: {
     // Neumorphic effect - soft, wide shadows
@@ -1004,15 +1012,16 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
   },
   streakIconContainer: {
-    width: rs(56),
-    height: rs(56),
-    borderRadius: rs(28),
+    width: rs(44),
+    height: rs(44),
+    borderRadius: rs(22),
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: rm(14),
+    marginRight: rm(10),
     // Neumorphic icon container - soft shadows
     shadowColor: '#000',
+    marginTop: rm(30),
     shadowOffset: { width: rs(3), height: rs(3) },
     shadowOpacity: 0.08,
     shadowRadius: rs(8),
@@ -1022,31 +1031,45 @@ const styles = StyleSheet.create({
   },
   streakContent: {
     flex: 1,
+    minWidth: 0,
+    gap: rm(2),
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   streakLabel: {
-    fontSize: theme.typography.fontSize.captionSmall,
+    fontSize: rf(10),
+    lineHeight: rf(12),
     color: theme.colors.textPrimary,
-    marginBottom: rm(8),
+    marginBottom: rm(2),
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    fontWeight: theme.typography.fontWeight.bold,
+    letterSpacing: 0.3,
+    fontWeight: theme.typography.fontWeight.medium,
+    textAlign: 'left',
+    width: '100%',
+    flexShrink: 1,
   },
   streakValue: {
-    fontSize: theme.typography.fontSize.sectionHeader,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontSize: rf(14),
+    lineHeight: rf(16),
+    fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
+    textAlign: 'left',
+    width: '100%',
   },
   streakBadge: {
-    fontSize: theme.typography.fontSize.captionSmall,
+    fontSize: rf(10),
     color: theme.colors.steps,
-    fontWeight: theme.typography.fontWeight.bold,
-    backgroundColor: theme.colors.steps + '20',
-    paddingHorizontal: rp(10),
-    paddingVertical: rp(5),
-    borderRadius: rs(10),
+    fontWeight: theme.typography.fontWeight.semibold,
+    backgroundColor: theme.colors.steps + '18',
+    paddingHorizontal: rp(8),
+    paddingVertical: rp(3),
+    borderRadius: rs(8),
     overflow: 'hidden',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+    minWidth: rs(42),
+    textAlign: 'center',
+    flexShrink: 1,
   },
   progressCard: {
     backgroundColor: theme.colors.card,

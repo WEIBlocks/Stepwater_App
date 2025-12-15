@@ -1,12 +1,30 @@
 import * as Notifications from 'expo-notifications';
 import { Reminder } from '../types';
 
+// Global notification handler - suppresses alerts for foreground service notifications
+// This ensures updates happen silently without showing alerts, sounds, or badges
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    // Check if this is a foreground service notification
+    const isForegroundService = notification.request.content.data?.type === 'foreground-service';
+    
+    if (isForegroundService) {
+      // Foreground service notifications should be completely silent
+      // No alerts, sounds, or badges - just update the notification in place
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      };
+    }
+    
+    // Regular notifications (reminders) should show alerts normally
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    };
+  },
 });
 
 export class NotificationService {

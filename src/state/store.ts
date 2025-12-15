@@ -3,6 +3,7 @@ import { generateUUIDSecure } from '../utils/uuid';
 import { DaySummary, WaterLogItem, UserGoals, Reminder, AppSettings, PedometerResult } from '../types';
 import { StorageService } from '../services/storage';
 import { getTodayDateString } from '../utils/formatting';
+import { ForegroundServiceManager } from '../services/foregroundServiceManager';
 
 interface AppState {
   // State
@@ -90,6 +91,21 @@ export const useStore = create<AppState>((set, get) => ({
     // Single set() call ensures immediate re-render
     set(updates);
     
+    // Update foreground notification immediately when steps change
+    // This ensures the notification reflects the new step count instantly
+    const state = get();
+    const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
+    ForegroundServiceManager.triggerUpdate(
+      steps,
+      state.stepGoal,
+      state.waterConsumed,
+      state.waterGoal,
+      waterUnit
+    ).catch((error) => {
+      // Log error but don't block - notification update is non-critical
+      console.warn('Failed to update foreground notification:', error);
+    });
+    
     // Save to storage AFTER updating store (non-blocking, async)
     // DO NOT reload from storage - currentSteps is the source of truth
     const today = getTodayDateString();
@@ -127,10 +143,36 @@ export const useStore = create<AppState>((set, get) => ({
 
   setStepGoal: (goal: number) => {
     set({ stepGoal: goal });
+    
+    // Update foreground notification immediately when step goal changes
+    const state = get();
+    const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
+    ForegroundServiceManager.triggerUpdate(
+      state.currentSteps,
+      goal,
+      state.waterConsumed,
+      state.waterGoal,
+      waterUnit
+    ).catch((error) => {
+      console.warn('Failed to update foreground notification:', error);
+    });
   },
 
   setWaterGoal: (goal: number) => {
     set({ waterGoal: goal });
+    
+    // Update foreground notification immediately when water goal changes
+    const state = get();
+    const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
+    ForegroundServiceManager.triggerUpdate(
+      state.currentSteps,
+      state.stepGoal,
+      state.waterConsumed,
+      goal,
+      waterUnit
+    ).catch((error) => {
+      console.warn('Failed to update foreground notification:', error);
+    });
   },
 
   addWater: async (amountMl: number) => {
@@ -163,6 +205,21 @@ export const useStore = create<AppState>((set, get) => ({
       if (!hadAchieved && nowAchieved && !get().lastAchievementWater) {
         set({ lastAchievementWater: true });
       }
+
+      // Update foreground notification immediately when water is added
+      // This ensures the notification reflects the new water amount instantly
+      const state = get();
+      const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
+      ForegroundServiceManager.triggerUpdate(
+        state.currentSteps,
+        state.stepGoal,
+        newConsumed,
+        state.waterGoal,
+        waterUnit
+      ).catch((error) => {
+        // Log error but don't block - notification update is non-critical
+        console.warn('Failed to update foreground notification:', error);
+      });
 
       // Save to storage (async, non-blocking)
       // Errors are handled internally - don't let them propagate
@@ -218,6 +275,21 @@ export const useStore = create<AppState>((set, get) => ({
     const newLogs = get().waterLogs.filter(l => l.id !== id);
     
     set({ waterConsumed: newConsumed, waterLogs: newLogs });
+
+    // Update foreground notification immediately when water is deleted
+    // This ensures the notification reflects the updated water amount instantly
+    const state = get();
+    const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
+    ForegroundServiceManager.triggerUpdate(
+      state.currentSteps,
+      state.stepGoal,
+      newConsumed,
+      state.waterGoal,
+      waterUnit
+    ).catch((error) => {
+      // Log error but don't block - notification update is non-critical
+      console.warn('Failed to update foreground notification:', error);
+    });
 
     // Update today's summary
     const summary = get().todaySummary;

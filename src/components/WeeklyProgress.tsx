@@ -133,16 +133,11 @@ const WeeklyProgress: React.FC<WeeklyProgressProps> = ({
   const formatDayValue = (value: number | null) => {
     if (value === null || value === 0) return null;
     
+    // Return exact number without compact notation
     if (type === 'steps') {
-      if (value >= 1000) {
-        return `${(value / 1000).toFixed(1)}k`;
-      }
-      return `${value}`;
+      return String(value);
     } else {
-      if (value >= 1000) {
-        return `${(value / 1000).toFixed(1)}L`;
-      }
-      return `${Math.round(value)}ml`;
+      return `${String(Math.round(value))}ml`;
     }
   };
 
