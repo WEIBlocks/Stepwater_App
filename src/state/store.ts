@@ -305,28 +305,36 @@ export const useStore = create<AppState>((set, get) => ({
     const today = getTodayDateString();
     const summary = await StorageService.getDaySummary(today);
     const logs = await StorageService.getWaterLogs(today);
-    const totalWater = logs.reduce((sum, log) => sum + log.amountMl, 0);
+    const totalWaterFromLogs = logs.reduce((sum, log) => sum + log.amountMl, 0);
     
-    // Always load steps from storage first - this ensures persistence across app reloads
-    // The pedometer will update this value once it has a valid reading
-    const storedSteps = summary?.steps || 0;
-    
-    // Use stored steps - they represent the actual steps taken today
-    // The pedometer will only update if it has a higher value (meaning user took more steps)
-    const stepsToUse = storedSteps;
+    // Keep the highest value between stored and in-memory steps so we NEVER go backwards to 0
+    const inMemorySteps = get().currentSteps || 0;
+    const storedSteps = summary?.steps ?? 0;
+    const stepsToUse = Math.max(storedSteps, inMemorySteps);
+
+    // Do the same for water: prefer the higher of logs vs. in-memory
+    const inMemoryWater = get().waterConsumed || 0;
+    const waterToUse = Math.max(totalWaterFromLogs, inMemoryWater);
 
     set({
-      todaySummary: summary || {
-        date: today,
-        steps: stepsToUse,
-        waterMl: 0,
-      },
-      waterConsumed: totalWater,
+      todaySummary: summary
+        ? {
+            ...summary,
+            steps: stepsToUse,
+            // Keep water in summary in sync with what we actually use
+            waterMl: summary.waterMl ?? waterToUse,
+          }
+        : {
+            date: today,
+            steps: stepsToUse,
+            waterMl: waterToUse,
+          },
+      waterConsumed: waterToUse,
       waterLogs: logs,
       currentSteps: stepsToUse,
     });
     
-    console.log('📊 Loaded today\'s data - steps:', stepsToUse);
+    console.log('📊 Loaded today\'s data - steps:', stepsToUse, 'water:', waterToUse);
   },
 
   loadGoals: async () => {

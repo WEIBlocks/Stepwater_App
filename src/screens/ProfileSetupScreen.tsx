@@ -141,16 +141,8 @@ const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
       };
     }
 
-    // Save profile
+    // Save profile - navigation is handled by AppNavigator
     await onComplete(profile);
-    
-    // Only navigate to Main if not editing (editing mode will go back via onComplete handler)
-    if (!isEditing) {
-      // Navigate to Main (HomeScreen) - small delay to ensure state is updated
-      setTimeout(() => {
-        navigation.navigate('Main');
-      }, 100);
-    }
   };
 
   const formatHeight = () => {

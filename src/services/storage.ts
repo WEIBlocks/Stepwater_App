@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   SETTINGS: '@stepwater:settings',
   ONBOARDING: '@stepwater:onboarding_completed',
   PROFILE: '@stepwater:user_profile',
+  ACHIEVEMENTS: '@stepwater:achievements',
 };
 
 export class StorageService {
@@ -248,6 +249,25 @@ export class StorageService {
       return profile?.hasCompletedProfile || false;
     } catch (error) {
       return false;
+    }
+  }
+
+  // Achievements
+  static async getAchievements(): Promise<{ lastAchievementStep: boolean; lastAchievementWater: boolean }> {
+    try {
+      const achievementsJson = await AsyncStorage.getItem(STORAGE_KEYS.ACHIEVEMENTS);
+      return achievementsJson ? JSON.parse(achievementsJson) : { lastAchievementStep: false, lastAchievementWater: false };
+    } catch (error) {
+      console.error('Error getting achievements:', error);
+      return { lastAchievementStep: false, lastAchievementWater: false };
+    }
+  }
+
+  static async saveAchievements(achievements: { lastAchievementStep: boolean; lastAchievementWater: boolean }): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.ACHIEVEMENTS, JSON.stringify(achievements));
+    } catch (error) {
+      console.error('Error saving achievements:', error);
     }
   }
 

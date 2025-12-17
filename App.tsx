@@ -14,110 +14,28 @@ import './src/services/notifications';
 
 // Initialize app hooks
 const AppContent = () => {
-  // Use selectors to get stable references
-  const loadTodayData = useStore((state) => state.loadTodayData);
-  const loadGoals = useStore((state) => state.loadGoals);
-  const loadReminders = useStore((state) => state.loadReminders);
-  const loadSettings = useStore((state) => state.loadSettings);
-  const setLoading = useStore((state) => state.setLoading);
-
-  useEffect(() => {
-    // Load all initial data and test Supabase connection
-    const initializeApp = async () => {
-      try {
-        setLoading(true);
-        
-        // Use Promise.allSettled to prevent one failure from blocking others
-        const results = await Promise.allSettled([
-          loadTodayData().catch(err => console.warn('loadTodayData failed:', err)),
-          loadGoals().catch(err => console.warn('loadGoals failed:', err)),
-          loadReminders().catch(err => console.warn('loadReminders failed:', err)),
-          loadSettings().catch(err => console.warn('loadSettings failed:', err)),
-        ]);
-
-        // Log any failures but don't block
-        results.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            const names = ['loadTodayData', 'loadGoals', 'loadReminders', 'loadSettings'];
-            console.warn(`Failed to ${names[index]}:`, result.reason);
-          }
-        });
-
-        // Test Supabase connection (non-blocking, after initial load)
-        setTimeout(async () => {
-          try {
-            const { testSupabaseConnection } = await import('./src/services/supabase');
-            testSupabaseConnection().catch(() => {
-              // Connection test failure shouldn't break the app
-            });
-          } catch (error) {
-            // Ignore import/connection errors
-          }
-        }, 2000);
-
-        // Start foreground service IMMEDIATELY (Android only)
-        // This ensures the notification appears as soon as the app launches
-        // Wrap in try-catch to prevent crashes if service fails to start
-        if (Platform.OS === 'android') {
-          // Start immediately after data loads (no delay)
-          // Use setTimeout to ensure it doesn't block app initialization
-          setTimeout(async () => {
-            try {
-              await ForegroundServiceManager.start();
-            } catch (error) {
-              // Log error but don't crash the app
-              console.error('Error starting foreground service:', error);
-              // App will continue to work without foreground service
-            }
-          }, 500);
-        }
-      } catch (error) {
-        console.error('Error initializing app:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Initialize asynchronously without blocking - use setTimeout to defer
-    setTimeout(() => {
-      initializeApp().catch((error) => {
-        console.error('Unhandled error in app initialization:', error);
-        setLoading(false);
-      });
-    }, 100);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - Zustand actions are stable
-
   // Initialize pedometer and hydration tracking (these are non-blocking)
+  // Data restoration is now handled in AppNavigator during splash screen
   usePedometer();
   useHydration();
 
-  // Handle app state changes to restart foreground service if needed
+  // Test Supabase connection (non-blocking, deferred)
   useEffect(() => {
-    if (Platform.OS !== 'android') {
-      return;
-    }
-
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active') {
-        // App came to foreground - ensure service is running
-        setTimeout(async () => {
-          if (!ForegroundServiceManager.isServiceRunning()) {
-            try {
-              await ForegroundServiceManager.start();
-            } catch (error) {
-              console.error('Error restarting foreground service on app resume:', error);
-            }
-          }
-        }, 1000);
+    // Test Supabase connection after a delay (non-blocking)
+    setTimeout(async () => {
+      try {
+        const { testSupabaseConnection } = await import('./src/services/supabase');
+        testSupabaseConnection().catch(() => {
+          // Connection test failure shouldn't break the app
+        });
+      } catch (error) {
+        // Ignore import/connection errors
       }
-    });
-
-    return () => {
-      subscription.remove();
-    };
+    }, 2000);
   }, []);
 
+  // Data restoration and app initialization is now handled in AppNavigator
+  // This component only initializes hooks that need to run continuously
   return <AppNavigator />;
 };
 

@@ -1,6 +1,7 @@
 /**
  * Progress Bar Utility Functions
  * Generates modern styled progress bars for notifications matching the design inspiration
+ * with goal-based states (normal vs. goal achieved)
  */
 
 // Progress bar characters - using textured blocks for a modern look
@@ -21,7 +22,7 @@ export function generateProgressBar(
   percentage: number,
   length: number = 12
 ): string {
-  // Clamp percentage between 0 and 100
+  // Clamp percentage between 0 and 100 (never render > 100%)
   const clampedPercentage = Math.max(0, Math.min(100, percentage));
   
   // Calculate number of filled blocks
@@ -38,32 +39,74 @@ export function generateProgressBar(
 /**
  * Formats a progress notification line matching the design with icons
  * @param icon - Icon emoji for the metric
- * @param current - Current value
- * @param goal - Goal value
+ * @param label - Human-friendly label ("Steps" | "Water")
+ * @param current - Current value for today
+ * @param goal - Daily goal value
  * @param progressBar - Progress bar string
- * @param percentage - Progress percentage
+ * @param percentageRaw - Raw progress percentage (can be > 100, will be clamped)
  * @param unit - Optional unit string
  * @returns Formatted string
  */
 export function formatProgressNotification(
   icon: string,
+  label: 'Steps' | 'Water',
   current: number,
   goal: number,
   progressBar: string,
-  percentage: number,
+  percentageRaw: number,
   unit: string = ''
 ): string {
   // Format numbers with commas for thousands
   const formattedCurrent = current.toLocaleString();
   const formattedGoal = goal.toLocaleString();
-  
-  // Format percentage (rounded, no decimals)
-  const percentageText = `${Math.round(percentage)}%`;
-  
-  // Build the formatted string matching the design with icons:
-  // "👣 5,234 / 10,000"
-  // "[progress bar] 52%"
+
+  // Determine if goal is achieved (current >= goal and goal > 0)
+  const goalAchieved = goal > 0 && current >= goal;
+
+  // Clamp percentage between 0 and 100 and round (never show > 100)
+  const clampedPercentage = Math.max(0, Math.min(100, Math.round(percentageRaw)));
+  const percentageToDisplay = goalAchieved ? 100 : clampedPercentage;
+  const percentageText = `${percentageToDisplay}%`;
+
   const unitText = unit ? ` ${unit}` : '';
+
+  // Extra amount beyond goal (only meaningful when goal is achieved)
+  const extra = Math.max(0, current - goal);
+  const formattedExtra = extra.toLocaleString();
+
+  if (goalAchieved) {
+    // Goal Achieved State (inspired by provided design)
+    // Example:
+    // "🚶 Steps Goal Achieved 🎉"
+    // "6,200 steps today   (+1,200)"
+    // "████████████ 100%"
+
+    const goalLabel =
+      label === 'Steps' ? 'Steps Goal Achieved 🎉' : 'Water Goal Achieved 🎉';
+
+    const amountLabel =
+      label === 'Steps'
+        ? `${formattedCurrent} steps today`
+        : `${formattedCurrent}${unitText} today`;
+
+    const extraLabel =
+      label === 'Steps'
+        ? `(+${formattedExtra} steps)`
+        : `(+${formattedExtra}${unitText})`;
+
+    const headerLine = `${icon} ${goalLabel}`;
+    // Small spacing between today and the extra amount to mimic the design
+    const amountLine = `${amountLabel}   ${extraLabel}`;
+    const progressLine = `${progressBar} ${percentageText}`;
+
+    return `${headerLine}\n${amountLine}\n${progressLine}`;
+  }
+  
+  // Normal (pre-goal) state
+  // Example:
+  // "🚶 5,234 / 10,000"
+  // "██████▱▱▱▱ 52%"
+
   const valueLine = `${icon} ${formattedCurrent}${unitText} / ${formattedGoal}${unitText}`;
   const progressLine = `${progressBar} ${percentageText}`;
   
@@ -86,17 +129,25 @@ export function generateNotificationBody(
   waterGoal: number,
   waterUnit: string = 'ml'
 ): string {
-  // Calculate percentages
+  // Calculate raw percentages (may be > 100, will be clamped later)
   const stepsPercentage = stepsGoal > 0 ? (stepsCurrent / stepsGoal) * 100 : 0;
   const waterPercentage = waterGoal > 0 ? (waterCurrent / waterGoal) * 100 : 0;
   
   // Generate progress bars
-  const stepsBar = generateProgressBar(stepsPercentage, 12);
-  const waterBar = generateProgressBar(waterPercentage, 12);
+  // If goal is achieved, force the bar to be full (100%)
+  const stepsBar = generateProgressBar(
+    stepsGoal > 0 && stepsCurrent >= stepsGoal ? 100 : stepsPercentage,
+    12
+  );
+  const waterBar = generateProgressBar(
+    waterGoal > 0 && waterCurrent >= waterGoal ? 100 : waterPercentage,
+    12
+  );
   
-  // Format matching the design with icons
+  // Format matching the design with icons and goal-aware states
   const stepsText = formatProgressNotification(
     STEP_ICON,
+    'Steps',
     stepsCurrent,
     stepsGoal,
     stepsBar,
@@ -105,6 +156,7 @@ export function generateNotificationBody(
   
   const waterText = formatProgressNotification(
     WATER_ICON,
+    'Water',
     waterCurrent,
     waterGoal,
     waterBar,

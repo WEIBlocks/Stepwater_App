@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Dimensions,
+  ActivityIndicator,
+  Alert,
+  Modal,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -18,6 +21,8 @@ import { Gender } from '../types';
 import { COLORS } from '../utils/constants';
 import { Svg, Circle, Path } from 'react-native-svg';
 import { wp, hp, rf, rs, rp, rm, SCREEN_WIDTH, SCREEN_HEIGHT } from '../utils/responsive';
+import { RestoreService, RestoreMode } from '../services/restoreService';
+import { useStore } from '../state/store';
 
 interface GenderSelectionScreenProps {
   onSelect: (gender: Gender) => void;
@@ -29,8 +34,15 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
   onSkip,
 }) => {
   const [selectedGender, setSelectedGender] = useState<Gender>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [showMergeReplaceModal, setShowMergeReplaceModal] = useState(false);
+  const [restoreData, setRestoreData] = useState<any>(null);
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
+  
+  const loadTodayData = useStore((state) => state.loadTodayData);
+  const loadGoals = useStore((state) => state.loadGoals);
+  const loadReminders = useStore((state) => state.loadReminders);
 
   const handleSelect = (gender: Gender) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -47,6 +59,74 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
   const handleSkip = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onSkip();
+  };
+
+  const handleRestoreData = async () => {
+    try {
+      setIsRestoring(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      // Attempt to restore data
+      const data = await RestoreService.attemptRestore();
+
+      if (!data) {
+        setIsRestoring(false);
+        Alert.alert(
+          'No Previous Data Found',
+          'No previous data was found in cloud storage or local backup.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Store restore data and show merge/replace dialog
+      setRestoreData(data);
+      setShowMergeReplaceModal(true);
+      setIsRestoring(false);
+    } catch (error) {
+      console.error('Error during restore:', error);
+      setIsRestoring(false);
+      Alert.alert(
+        'Failed to Restore Data',
+        'Failed to restore data. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleRestoreConfirm = async (mode: RestoreMode) => {
+    if (!restoreData) return;
+
+    try {
+      setIsRestoring(true);
+      setShowMergeReplaceModal(false);
+
+      // Restore the data
+      await RestoreService.restoreData(restoreData, mode);
+
+      // Reload store data
+      await Promise.all([
+        loadTodayData(),
+        loadGoals(),
+        loadReminders(),
+      ]);
+
+      setIsRestoring(false);
+      
+      Alert.alert(
+        'Success',
+        'Your previous data has been restored.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error restoring data:', error);
+      setIsRestoring(false);
+      Alert.alert(
+        'Failed to Restore Data',
+        'Failed to restore data. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const animatedScale = useAnimatedStyle(() => ({
@@ -225,11 +305,68 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
           >
             <Text style={styles.nextButtonText}>NEXT</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleSkip} style={styles.restoreButton}>
-            <Text style={styles.restoreText}>Restore Data</Text>
+          <TouchableOpacity 
+            onPress={handleRestoreData} 
+            style={styles.restoreButton}
+            disabled={isRestoring}
+          >
+            {isRestoring ? (
+              <ActivityIndicator size="small" color="#94A3B8" />
+            ) : (
+              <Text style={styles.restoreText}>Restore Data</Text>
+            )}
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {/* Merge/Replace Modal */}
+      <Modal
+        visible={showMergeReplaceModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMergeReplaceModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Restore Data</Text>
+            <Text style={styles.modalMessage}>
+              How would you like to restore your data?
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.mergeButton]}
+                onPress={() => handleRestoreConfirm('merge')}
+              >
+                <Text style={styles.modalButtonText}>Merge with Current Data</Text>
+                <Text style={styles.modalButtonSubtext}>
+                  Keep existing data and add restored data
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.replaceButton]}
+                onPress={() => handleRestoreConfirm('replace')}
+              >
+                <Text style={styles.modalButtonText}>Replace Current Data</Text>
+                <Text style={styles.modalButtonSubtext}>
+                  Replace all current data with restored data
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowMergeReplaceModal(false);
+                  setRestoreData(null);
+                }}
+              >
+                <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -353,6 +490,71 @@ const styles = StyleSheet.create({
     height: rs(60),
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: rp(24),
+  },
+  modalContent: {
+    backgroundColor: '#1E293B',
+    borderRadius: rs(20),
+    padding: rp(24),
+    width: '100%',
+    maxWidth: rs(400),
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  modalTitle: {
+    fontSize: rf(24),
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: rm(8),
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: rf(16),
+    color: '#94A3B8',
+    marginBottom: rm(24),
+    textAlign: 'center',
+    lineHeight: rf(22),
+  },
+  modalButtons: {
+    gap: rm(12),
+  },
+  modalButton: {
+    padding: rp(16),
+    borderRadius: rs(12),
+    borderWidth: 2,
+    backgroundColor: '#0F172A',
+  },
+  mergeButton: {
+    borderColor: '#3B82F6',
+  },
+  replaceButton: {
+    borderColor: '#10B981',
+  },
+  cancelButton: {
+    borderColor: '#475569',
+    marginTop: rm(8),
+  },
+  modalButtonText: {
+    fontSize: rf(16),
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: rm(4),
+  },
+  modalButtonSubtext: {
+    fontSize: rf(12),
+    color: '#94A3B8',
+    textAlign: 'center',
+    fontWeight: '400',
+  },
+  cancelButtonText: {
+    color: '#94A3B8',
   },
 });
 
