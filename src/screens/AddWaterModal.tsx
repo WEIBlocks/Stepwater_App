@@ -409,6 +409,7 @@ const AddWaterModal: React.FC<AddWaterModalProps> = ({
       animationType="slide"
       transparent={true}
       onRequestClose={onClose}
+      presentationStyle="overFullScreen"
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

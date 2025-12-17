@@ -99,6 +99,7 @@ const AchievementModal: React.FC<AchievementModalProps> = ({
       onRequestClose={handleClose}
       statusBarTranslucent={true}
       hardwareAccelerated={true}
+      presentationStyle="overFullScreen"
     >
       <View style={styles.overlay} pointerEvents="box-none">
         <TouchableOpacity

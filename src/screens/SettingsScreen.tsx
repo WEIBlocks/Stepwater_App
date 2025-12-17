@@ -78,7 +78,7 @@ const SettingsScreen: React.FC = () => {
   const handleDeleteAllData = () => {
     Alert.alert(
       'Delete All Data',
-      'This will delete all your steps, water history, profile, goals, reminders, and settings. This action cannot be undone. You will be taken back to the profile setup screen.',
+      'This will delete all your steps, water history, profile, goals, reminders, streaks, and settings. This action cannot be undone. You will be taken back to the profile setup screen.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -86,29 +86,88 @@ const SettingsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Create backup before deletion
+              await StorageService.createBackup();
+              
               // Stop pedometer first
               PedometerService.stopPedometer();
+              
+              // Clear all Supabase data (if configured) - do this before clearing local storage
+              try {
+                const { SupabaseStorageService } = await import('../services/supabaseStorage');
+                await SupabaseStorageService.deleteAllData();
+              } catch (supabaseError) {
+                // Ignore Supabase errors - local data will still be cleared
+                console.warn('Supabase cleanup error (non-critical):', supabaseError);
+              }
+              
+              // Get backup before clearing (to restore it after)
+              const backup = await StorageService.getBackup();
               
               // Clear all AsyncStorage data
               await AsyncStorage.clear();
               
-              // Reset store state to initial values
-              useStore.getState().setCurrentSteps(0);
-              useStore.getState().setWaterGoal(2000);
-              useStore.getState().setStepGoal(10000);
-              useStore.getState().setPedometerAvailable(false);
-              useStore.getState().setLoading(false);
-              
-              // Clear Supabase data (if configured)
-              try {
-                // Delete all data from Supabase
-                const today = new Date().toISOString().split('T')[0];
-                await StorageService.saveDaySummary({ date: today, steps: 0, waterMl: 0 });
-                // The Supabase service will handle cleanup
-              } catch (supabaseError) {
-                // Ignore Supabase errors - local data is cleared
-                console.warn('Supabase cleanup error (non-critical):', supabaseError);
+              // Restore backup immediately after clearing (so it's available for restore later)
+              if (backup) {
+                await AsyncStorage.setItem('@stepwater:backup_data', JSON.stringify(backup));
               }
+              
+              // Reset all store state to initial/zero values
+              const store = useStore.getState();
+              
+              // Reset steps to 0
+              store.setCurrentSteps(0);
+              
+              // Reset goals to defaults
+              store.setStepGoal(10000);
+              store.setWaterGoal(2000);
+              
+              // Reset achievements
+              store.resetAchievements();
+              
+              // Reset pedometer and loading state
+              store.setPedometerAvailable(false);
+              store.setLoading(false);
+              
+              // Manually reset all state values to zero/defaults
+              useStore.setState({
+                currentSteps: 0,
+                waterConsumed: 0,
+                waterLogs: [],
+                todaySummary: null,
+                reminders: [],
+                settings: {
+                  unit: 'metric',
+                  theme: 'auto',
+                  accentColor: '#6366f1',
+                  notificationsEnabled: true,
+                  hasCompletedOnboarding: false,
+                },
+                isStepTrackingPaused: false,
+                lastAchievementStep: false,
+                lastAchievementWater: false,
+              });
+              
+              // Save default goals to storage
+              await StorageService.saveGoals({
+                dailySteps: 10000,
+                dailyWaterMl: 2000,
+              });
+              
+              // Save default settings
+              await StorageService.saveSettings({
+                unit: 'metric',
+                theme: 'auto',
+                accentColor: '#6366f1',
+                notificationsEnabled: true,
+                hasCompletedOnboarding: false,
+              });
+              
+              // Save reset achievements
+              await StorageService.saveAchievements({
+                lastAchievementStep: false,
+                lastAchievementWater: false,
+              });
               
               Alert.alert(
                 'Data Deleted',

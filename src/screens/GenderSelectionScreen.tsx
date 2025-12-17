@@ -21,8 +21,9 @@ import { Gender } from '../types';
 import { COLORS } from '../utils/constants';
 import { Svg, Circle, Path } from 'react-native-svg';
 import { wp, hp, rf, rs, rp, rm, SCREEN_WIDTH, SCREEN_HEIGHT } from '../utils/responsive';
-import { RestoreService, RestoreMode } from '../services/restoreService';
+import { StorageService } from '../services/storage';
 import { useStore } from '../state/store';
+import { SupabaseStorageService } from '../services/supabaseStorage';
 
 interface GenderSelectionScreenProps {
   onSelect: (gender: Gender) => void;
@@ -36,13 +37,15 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
   const [selectedGender, setSelectedGender] = useState<Gender>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [showMergeReplaceModal, setShowMergeReplaceModal] = useState(false);
-  const [restoreData, setRestoreData] = useState<any>(null);
+  const [hasBackup, setHasBackup] = useState(false);
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
   
-  const loadTodayData = useStore((state) => state.loadTodayData);
-  const loadGoals = useStore((state) => state.loadGoals);
-  const loadReminders = useStore((state) => state.loadReminders);
+  const store = useStore();
+  const loadTodayData = store.loadTodayData;
+  const loadGoals = store.loadGoals;
+  const loadReminders = store.loadReminders;
+  const loadSettings = store.loadSettings;
 
   const handleSelect = (gender: Gender) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -61,71 +64,147 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
     onSkip();
   };
 
+  // Check if backup exists on mount
+  React.useEffect(() => {
+    const checkBackup = async () => {
+      const backupExists = await StorageService.hasBackup();
+      setHasBackup(backupExists);
+    };
+    checkBackup();
+  }, []);
+
   const handleRestoreData = async () => {
     try {
-      setIsRestoring(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-      // Attempt to restore data
-      const data = await RestoreService.attemptRestore();
-
-      if (!data) {
-        setIsRestoring(false);
+      
+      // Check if backup exists
+      const backupExists = await StorageService.hasBackup();
+      if (!backupExists) {
         Alert.alert(
           'No Previous Data Found',
-          'No previous data was found in cloud storage or local backup.',
+          'No previous data was found to restore.',
           [{ text: 'OK' }]
         );
         return;
       }
 
-      // Store restore data and show merge/replace dialog
-      setRestoreData(data);
+      // Show merge/replace dialog
       setShowMergeReplaceModal(true);
-      setIsRestoring(false);
     } catch (error) {
-      console.error('Error during restore:', error);
-      setIsRestoring(false);
+      console.error('Error checking backup:', error);
       Alert.alert(
-        'Failed to Restore Data',
-        'Failed to restore data. Please try again.',
+        'Error',
+        'Failed to check for backup data. Please try again.',
         [{ text: 'OK' }]
       );
     }
   };
 
-  const handleRestoreConfirm = async (mode: RestoreMode) => {
-    if (!restoreData) return;
-
+  const handleRestoreConfirm = async (shouldRestore: boolean) => {
     try {
       setIsRestoring(true);
       setShowMergeReplaceModal(false);
 
-      // Restore the data
-      await RestoreService.restoreData(restoreData, mode);
-
-      // Reload store data
-      await Promise.all([
-        loadTodayData(),
-        loadGoals(),
-        loadReminders(),
-      ]);
-
-      setIsRestoring(false);
-      
-      Alert.alert(
-        'Success',
-        'Your previous data has been restored.',
-        [{ text: 'OK' }]
-      );
+      if (shouldRestore) {
+        // Merge with Current Data - Restore the data
+        await StorageService.restoreFromBackup();
+        
+        // Sync restored data to Supabase if user is logged in
+        try {
+          const { supabase } = await import('../services/supabase');
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session && session.user) {
+            const backup = await StorageService.getBackup();
+            if (backup) {
+              // Sync day summaries
+              if (backup.daySummaries && backup.daySummaries.length > 0) {
+                for (const summary of backup.daySummaries) {
+                  await SupabaseStorageService.saveDaySummary(summary).catch(() => {});
+                }
+              }
+              
+              // Sync water logs
+              if (backup.waterLogs && backup.waterLogs.length > 0) {
+                for (const log of backup.waterLogs) {
+                  await SupabaseStorageService.addWaterLog(log).catch(() => {});
+                }
+              }
+              
+              // Sync goals
+              if (backup.goals) {
+                await SupabaseStorageService.saveGoals(backup.goals).catch(() => {});
+              }
+              
+              // Sync reminders
+              if (backup.reminders && backup.reminders.length > 0) {
+                await SupabaseStorageService.saveReminders(backup.reminders).catch(() => {});
+              }
+            }
+          }
+        } catch (supabaseError) {
+          console.warn('Supabase sync after restore failed:', supabaseError);
+        }
+        
+        // Reload store data
+        await Promise.all([
+          loadTodayData(),
+          loadGoals(),
+          loadReminders(),
+          loadSettings(),
+        ]);
+        
+        // Restore achievements to store
+        const achievements = await StorageService.getAchievements();
+        if (achievements) {
+          useStore.setState({
+            lastAchievementStep: achievements.lastAchievementStep || false,
+            lastAchievementWater: achievements.lastAchievementWater || false,
+          });
+        }
+        
+        // Check if profile exists and is completed after restore
+        const hasCompletedProfile = await StorageService.hasCompletedProfile();
+        if (hasCompletedProfile) {
+          // Profile exists - mark onboarding as completed and navigate to home
+          await StorageService.setOnboardingCompleted();
+          
+          // Trigger checkSetup in AppNavigator to update state and navigate
+          const checkSetup = (global as any).__appNavigatorCheckSetup;
+          if (checkSetup) {
+            await checkSetup();
+          }
+        }
+        
+        // Clear backup after successful restore
+        await StorageService.clearBackup();
+        setHasBackup(false);
+        
+        Alert.alert(
+          'Data Restored',
+          'Your previous data has been successfully restored!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        // Replace Current Data - Just clear the backup and hide the button
+        // User will continue with setup (gender and profile)
+        await StorageService.clearBackup();
+        setHasBackup(false);
+        
+        Alert.alert(
+          'Backup Cleared',
+          'The backup has been cleared. You can continue with a fresh start.',
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
-      console.error('Error restoring data:', error);
-      setIsRestoring(false);
+      console.error('Error handling restore:', error);
       Alert.alert(
-        'Failed to Restore Data',
-        'Failed to restore data. Please try again.',
+        'Error',
+        'An error occurred. Please try again.',
         [{ text: 'OK' }]
       );
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -305,17 +384,19 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
           >
             <Text style={styles.nextButtonText}>NEXT</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={handleRestoreData} 
-            style={styles.restoreButton}
-            disabled={isRestoring}
-          >
-            {isRestoring ? (
-              <ActivityIndicator size="small" color="#94A3B8" />
-            ) : (
-              <Text style={styles.restoreText}>Restore Data</Text>
-            )}
-          </TouchableOpacity>
+          {hasBackup && (
+            <TouchableOpacity 
+              onPress={handleRestoreData} 
+              style={styles.restoreButton}
+              disabled={isRestoring}
+            >
+              {isRestoring ? (
+                <ActivityIndicator size="small" color="#94A3B8" />
+              ) : (
+                <Text style={styles.restoreText}>Restore Data</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </Animated.View>
 
@@ -336,21 +417,23 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.mergeButton]}
-                onPress={() => handleRestoreConfirm('merge')}
+                onPress={() => handleRestoreConfirm(true)}
+                disabled={isRestoring}
               >
                 <Text style={styles.modalButtonText}>Merge with Current Data</Text>
                 <Text style={styles.modalButtonSubtext}>
-                  Keep existing data and add restored data
+                  Restore your last deleted data (steps, goals, water, reminders, etc.)
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.modalButton, styles.replaceButton]}
-                onPress={() => handleRestoreConfirm('replace')}
+                onPress={() => handleRestoreConfirm(false)}
+                disabled={isRestoring}
               >
                 <Text style={styles.modalButtonText}>Replace Current Data</Text>
                 <Text style={styles.modalButtonSubtext}>
-                  Replace all current data with restored data
+                  Don't restore and clear the backup
                 </Text>
               </TouchableOpacity>
 
@@ -358,8 +441,8 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
                   setShowMergeReplaceModal(false);
-                  setRestoreData(null);
                 }}
+                disabled={isRestoring}
               >
                 <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
               </TouchableOpacity>

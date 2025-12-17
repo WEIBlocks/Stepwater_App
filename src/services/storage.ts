@@ -13,6 +13,7 @@ const STORAGE_KEYS = {
   ONBOARDING: '@stepwater:onboarding_completed',
   PROFILE: '@stepwater:user_profile',
   ACHIEVEMENTS: '@stepwater:achievements',
+  BACKUP: '@stepwater:backup_data',
 };
 
 export class StorageService {
@@ -319,6 +320,109 @@ export class StorageService {
     } catch (error) {
       console.error('Error importing data:', error);
       throw error;
+    }
+  }
+
+  // Backup/Restore functionality
+  static async createBackup(): Promise<void> {
+    try {
+      const backup = {
+        daySummaries: await this.getAllDaySummaries(),
+        waterLogs: await this.getWaterLogs(),
+        goals: await this.getGoals(),
+        reminders: await this.getReminders(),
+        settings: await this.getSettings(),
+        profile: await this.getProfile(),
+        achievements: await this.getAchievements(),
+        backupDate: new Date().toISOString(),
+      };
+      
+      await AsyncStorage.setItem(STORAGE_KEYS.BACKUP, JSON.stringify(backup));
+      console.log('✅ Backup created successfully');
+    } catch (error) {
+      console.error('Error creating backup:', error);
+      throw error;
+    }
+  }
+
+  static async getBackup(): Promise<any | null> {
+    try {
+      const backupJson = await AsyncStorage.getItem(STORAGE_KEYS.BACKUP);
+      if (!backupJson) return null;
+      return JSON.parse(backupJson);
+    } catch (error) {
+      console.error('Error getting backup:', error);
+      return null;
+    }
+  }
+
+  static async hasBackup(): Promise<boolean> {
+    try {
+      const backup = await this.getBackup();
+      return backup !== null;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  static async restoreFromBackup(): Promise<void> {
+    try {
+      const backup = await this.getBackup();
+      if (!backup) {
+        throw new Error('No backup found');
+      }
+
+      // Restore day summaries
+      if (backup.daySummaries && backup.daySummaries.length > 0) {
+        const summaries: Record<string, DaySummary> = {};
+        backup.daySummaries.forEach((summary: DaySummary) => {
+          summaries[summary.date] = summary;
+        });
+        await AsyncStorage.setItem(STORAGE_KEYS.DAY_SUMMARIES, JSON.stringify(summaries));
+      }
+
+      // Restore water logs
+      if (backup.waterLogs && backup.waterLogs.length > 0) {
+        await AsyncStorage.setItem(STORAGE_KEYS.WATER_LOGS, JSON.stringify(backup.waterLogs));
+      }
+
+      // Restore goals
+      if (backup.goals) {
+        await this.saveGoals(backup.goals);
+      }
+
+      // Restore reminders
+      if (backup.reminders) {
+        await this.saveReminders(backup.reminders);
+      }
+
+      // Restore settings
+      if (backup.settings) {
+        await this.saveSettings(backup.settings);
+      }
+
+      // Restore profile
+      if (backup.profile) {
+        await this.saveProfile(backup.profile);
+      }
+
+      // Restore achievements
+      if (backup.achievements) {
+        await this.saveAchievements(backup.achievements);
+      }
+
+      console.log('✅ Data restored from backup successfully');
+    } catch (error) {
+      console.error('Error restoring from backup:', error);
+      throw error;
+    }
+  }
+
+  static async clearBackup(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.BACKUP);
+    } catch (error) {
+      console.error('Error clearing backup:', error);
     }
   }
 }

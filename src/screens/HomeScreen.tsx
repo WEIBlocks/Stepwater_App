@@ -133,6 +133,7 @@ const HomeScreen: React.FC = () => {
   const [showWaterAchievement, setShowWaterAchievement] = useState(false);
   const [statistics, setStatistics] = useState<TrackingStatistics | null>(null);
   const [allSummaries, setAllSummaries] = useState<DaySummary[]>([]);
+  const [pendingWaterAchievement, setPendingWaterAchievement] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -170,13 +171,35 @@ const HomeScreen: React.FC = () => {
 
   useEffect(() => {
     if (lastAchievementWater) {
-      // Delay showing modal slightly to prevent UI freeze
+      // On iOS, we need to close AddWaterModal first before showing AchievementModal
+      // to prevent modal conflicts that cause UI freezing
+      if (showAddWater) {
+        // Close AddWaterModal first
+        setShowAddWater(false);
+        // Mark that we have a pending achievement to show
+        setPendingWaterAchievement(true);
+      } else {
+        // AddWaterModal is not open, show achievement modal directly
+        const timer = setTimeout(() => {
+          setShowWaterAchievement(true);
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [lastAchievementWater, showAddWater]);
+
+  // Show water achievement modal after AddWaterModal closes
+  useEffect(() => {
+    if (pendingWaterAchievement && !showAddWater) {
+      // Wait for AddWaterModal to fully close before showing achievement
+      // iOS needs time for modal transition to complete
       const timer = setTimeout(() => {
         setShowWaterAchievement(true);
-      }, 100);
+        setPendingWaterAchievement(false);
+      }, 300); // Increased delay to ensure modal transition completes on iOS
       return () => clearTimeout(timer);
     }
-  }, [lastAchievementWater]);
+  }, [pendingWaterAchievement, showAddWater]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -207,7 +230,10 @@ const HomeScreen: React.FC = () => {
       // addWater already updates the store state immediately
       // No need to reload, UI will update automatically via Zustand
       await addWater(amount);
-      // Don't close modal automatically - let user close it manually
+      
+      // If goal was achieved, the useEffect will handle closing AddWaterModal
+      // and showing AchievementModal. Don't close modal manually here.
+      // The modal will be closed by the achievement effect if needed.
     } catch (error: any) {
       console.error('Error adding water:', error);
       Alert.alert(
@@ -251,7 +277,7 @@ const HomeScreen: React.FC = () => {
         {/* Steps Section - Hero Display */}
         <View style={styles.heroStepsCard}>
           <LinearGradient
-            colors={[theme.colors.steps + '15', theme.colors.steps + '08', theme.colors.card]}
+            colors={[theme.colors.card, theme.colors.card, theme.colors.surface]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
@@ -316,7 +342,7 @@ const HomeScreen: React.FC = () => {
         {/* Water Section - Hero Display */}
         <View style={styles.heroWaterCard}>
           <LinearGradient
-            colors={[theme.colors.water + '15', theme.colors.water + '08', theme.colors.card]}
+            colors={[theme.colors.card, theme.colors.card, theme.colors.surface]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
@@ -625,28 +651,34 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.medium,
   },
   heroStepsCard: {
-    borderRadius: theme.borderRadius.card,
+    borderRadius: rs(24),
     marginBottom: rm(20),
     overflow: 'hidden',
+    backgroundColor: theme.colors.card,
+    // Glowing teal border effect
+    borderWidth: 2,
+    borderColor: theme.colors.steps + '60',
+    // Multiple shadow layers for glowing effect
     shadowColor: theme.colors.steps,
-    shadowOffset: { width: 0, height: rs(8) },
-    shadowOpacity: 0.15,
-    shadowRadius: rs(16),
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.steps + '20',
+    shadowOffset: { width: 0, height: rs(4) },
+    shadowOpacity: 0.4,
+    shadowRadius: rs(20),
+    elevation: 12,
   },
   heroWaterCard: {
-    borderRadius: theme.borderRadius.card,
+    borderRadius: rs(24),
     marginBottom: rm(20),
     overflow: 'hidden',
+    backgroundColor: theme.colors.card,
+    // Glowing blue border effect
+    borderWidth: 2,
+    borderColor: theme.colors.water + '60',
+    // Multiple shadow layers for glowing effect
     shadowColor: theme.colors.water,
-    shadowOffset: { width: 0, height: rs(8) },
-    shadowOpacity: 0.15,
-    shadowRadius: rs(16),
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.water + '20',
+    shadowOffset: { width: 0, height: rs(4) },
+    shadowOpacity: 0.4,
+    shadowRadius: rs(20),
+    elevation: 12,
   },
   heroGradient: {
     padding: rp(28),

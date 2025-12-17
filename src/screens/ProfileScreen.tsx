@@ -11,6 +11,8 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StorageService } from '../services/storage';
 import { ExportService } from '../services/exportService';
+import { PedometerService } from '../services/pedometerService';
+import { useStore } from '../state/store';
 import { COLORS } from '../utils/constants';
 import type { UserProfile } from '../types';
 import { wp, hp, rf, rs, rp, rm } from '../utils/responsive';
@@ -92,7 +94,7 @@ const ProfileScreen: React.FC = () => {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'This will remove all your local data (steps, water logs, goals, reminders, and profile). This action cannot be undone.',
+      'This will delete all your steps, water history, profile, goals, reminders, streaks, and settings. This action cannot be undone. You will be taken back to the onboarding screen.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -100,17 +102,118 @@ const ProfileScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Create backup before deletion
+              await StorageService.createBackup();
+              
+              // Stop pedometer first
+              PedometerService.stopPedometer();
+              
+              // Clear all Supabase data (if configured) - do this before clearing local storage
+              try {
+                const { SupabaseStorageService } = await import('../services/supabaseStorage');
+                await SupabaseStorageService.deleteAllData();
+              } catch (supabaseError) {
+                // Ignore Supabase errors - local data will still be cleared
+                console.warn('Supabase cleanup error (non-critical):', supabaseError);
+              }
+              
+              // Get backup before clearing (to restore it after)
+              const backup = await StorageService.getBackup();
+              
+              // Clear all AsyncStorage data
               await AsyncStorage.clear();
+              
+              // Restore backup immediately after clearing (so it's available for restore later)
+              if (backup) {
+                await AsyncStorage.setItem('@stepwater:backup_data', JSON.stringify(backup));
+              }
+              
+              // Reset all store state to initial/zero values
+              const store = useStore.getState();
+              
+              // Reset steps to 0
+              store.setCurrentSteps(0);
+              
+              // Reset goals to defaults
+              store.setStepGoal(10000);
+              store.setWaterGoal(2000);
+              
+              // Reset achievements
+              store.resetAchievements();
+              
+              // Reset pedometer and loading state
+              store.setPedometerAvailable(false);
+              store.setLoading(false);
+              
+              // Manually reset all state values to zero/defaults
+              useStore.setState({
+                currentSteps: 0,
+                waterConsumed: 0,
+                waterLogs: [],
+                todaySummary: null,
+                reminders: [],
+                settings: {
+                  unit: 'metric',
+                  theme: 'auto',
+                  accentColor: '#6366f1',
+                  notificationsEnabled: true,
+                  hasCompletedOnboarding: false,
+                },
+                isStepTrackingPaused: false,
+                lastAchievementStep: false,
+                lastAchievementWater: false,
+              });
+              
+              // Save default goals to storage
+              await StorageService.saveGoals({
+                dailySteps: 10000,
+                dailyWaterMl: 2000,
+              });
+              
+              // Save default settings
+              await StorageService.saveSettings({
+                unit: 'metric',
+                theme: 'auto',
+                accentColor: '#6366f1',
+                notificationsEnabled: true,
+                hasCompletedOnboarding: false,
+              });
+              
+              // Save reset achievements
+              await StorageService.saveAchievements({
+                lastAchievementStep: false,
+                lastAchievementWater: false,
+              });
+              
+              // Reset profile state
               setProfile(null);
+              
               Alert.alert(
                 'Account Deleted',
-                'All your data has been removed from this device.'
+                'All your data has been successfully deleted. You will now be taken back to the onboarding screen.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: async () => {
+                      // Force AppNavigator to re-check setup immediately
+                      // This will detect cleared storage and reset to onboarding flow:
+                      // Onboarding → GenderSelection → ProfileSetup → HomeScreen
+                      const checkSetup = (global as any).__appNavigatorCheckSetup;
+                      if (checkSetup && typeof checkSetup === 'function') {
+                        // Call checkSetup which will reset hasCompletedOnboarding and hasCompletedProfile to false
+                        // This will cause AppNavigator to show Onboarding screen
+                        await checkSetup();
+                      }
+                    },
+                  },
+                ]
               );
             } catch (error) {
               Alert.alert(
                 'Error',
                 'Failed to delete account data. Please try again.'
               );
+              console.error('Error deleting account data:', error);
             }
           },
         },

@@ -413,5 +413,103 @@ export class SupabaseStorageService {
       this.handleSupabaseError('saveReminders', error);
     }
   }
+
+  // Delete all data from Supabase
+  static async deleteAllData(): Promise<void> {
+    if (!this.isConfigured()) {
+      return;
+    }
+
+    try {
+      // Delete all day summaries - use gte with a very old date to match all records
+      const { error: daySummariesError } = await supabase
+        .from('day_summaries')
+        .delete()
+        .gte('date', '1900-01-01'); // This will match all dates (all records)
+      
+      if (daySummariesError && !this.isTableError(daySummariesError)) {
+        this.handleSupabaseError('deleteAllData (day_summaries)', daySummariesError);
+      }
+
+      // Delete all water logs - fetch all and delete individually to avoid issues
+      try {
+        const { data: allWaterLogs } = await supabase
+          .from('water_logs')
+          .select('id');
+        
+        if (allWaterLogs && allWaterLogs.length > 0) {
+          // Delete in batches to avoid issues
+          for (const log of allWaterLogs) {
+            if (log?.id) {
+              await supabase
+                .from('water_logs')
+                .delete()
+                .eq('id', log.id);
+            }
+          }
+        }
+      } catch (waterLogsError) {
+        if (!this.isTableError(waterLogsError)) {
+          this.handleSupabaseError('deleteAllData (water_logs)', waterLogsError);
+        }
+      }
+
+      // Delete all reminders - fetch all and delete individually
+      try {
+        const { data: allReminders } = await supabase
+          .from('reminders')
+          .select('id');
+        
+        if (allReminders && allReminders.length > 0) {
+          for (const reminder of allReminders) {
+            if (reminder?.id) {
+              await supabase
+                .from('reminders')
+                .delete()
+                .eq('id', reminder.id);
+            }
+          }
+        }
+      } catch (remindersError) {
+        if (!this.isTableError(remindersError)) {
+          this.handleSupabaseError('deleteAllData (reminders)', remindersError);
+        }
+      }
+
+      // Reset goals to defaults
+      // Note: user_goals might have a unique constraint, so we'll update it instead
+      const { error: goalsError } = await supabase
+        .from('user_goals')
+        .update({
+          daily_steps: 10000,
+          daily_water_ml: 2000,
+          updated_at: new Date().toISOString(),
+        });
+      
+      if (goalsError && !this.isTableError(goalsError)) {
+        // If update fails, try to delete all and let it recreate on next save
+        try {
+          const { data: allGoals } = await supabase
+            .from('user_goals')
+            .select('id');
+          
+          if (allGoals && allGoals.length > 0) {
+            for (const goal of allGoals) {
+              if (goal?.id) {
+                await supabase
+                  .from('user_goals')
+                  .delete()
+                  .eq('id', goal.id);
+              }
+            }
+          }
+        } catch (deleteGoalsError) {
+          // Silently ignore - goals will be reset on next save
+        }
+      }
+    } catch (error) {
+      this.handleSupabaseError('deleteAllData', error);
+    }
+  }
 }
 
