@@ -15,6 +15,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../state/store';
 import { StorageService } from '../services/storage';
 import { PedometerService } from '../services/pedometerService';
+import { nativeStepWaterService } from '../services/nativeStepWaterService';
+import { Platform } from 'react-native';
 import { COLORS } from '../utils/constants';
 import { theme } from '../utils/theme';
 import { wp, hp, rf, rs, rp, rm } from '../utils/responsive';
@@ -42,9 +44,9 @@ const SettingsScreen: React.FC = () => {
     setNotificationsEnabled(settings.notificationsEnabled);
   }, [settings.notificationsEnabled]);
 
-  const handleUnitChange = (unit: 'metric' | 'imperial') => {
+  const handleUnitChange = async (unit: 'metric' | 'imperial') => {
     const newSettings = { ...settings, unit };
-    setSettings(newSettings);
+    await setSettings(newSettings);
     saveSettings();
   };
 
@@ -52,10 +54,10 @@ const SettingsScreen: React.FC = () => {
     navigation.navigate('Profile');
   };
 
-  const handleNotificationsToggle = (enabled: boolean) => {
+  const handleNotificationsToggle = async (enabled: boolean) => {
     setNotificationsEnabled(enabled);
     const newSettings = { ...settings, notificationsEnabled: enabled };
-    setSettings(newSettings);
+    await setSettings(newSettings);
     saveSettings();
   };
 
@@ -78,7 +80,7 @@ const SettingsScreen: React.FC = () => {
   const handleDeleteAllData = () => {
     Alert.alert(
       'Delete All Data',
-      'This will delete all your steps, water history, profile, goals, reminders, streaks, and settings. This action cannot be undone. You will be taken back to the profile setup screen.',
+      'This will delete all your steps, water history, profile, goals, reminders, streaks, and settings. This action cannot be undone. You will be taken back to the onboarding screen.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -92,6 +94,18 @@ const SettingsScreen: React.FC = () => {
               // Stop pedometer first
               PedometerService.stopPedometer();
               
+              // Stop native service on Android (if running)
+              if (Platform.OS === 'android') {
+                try {
+                  const isRunning = await nativeStepWaterService.isServiceRunning();
+                  if (isRunning) {
+                    await nativeStepWaterService.stopService();
+                  }
+                } catch (nativeError) {
+                  console.warn('Error stopping native service:', nativeError);
+                }
+              }
+              
               // Clear all Supabase data (if configured) - do this before clearing local storage
               try {
                 const { SupabaseStorageService } = await import('../services/supabaseStorage');
@@ -104,7 +118,7 @@ const SettingsScreen: React.FC = () => {
               // Get backup before clearing (to restore it after)
               const backup = await StorageService.getBackup();
               
-              // Clear all AsyncStorage data
+              // Clear all AsyncStorage data (this includes profile, settings, goals, etc.)
               await AsyncStorage.clear();
               
               // Restore backup immediately after clearing (so it's available for restore later)
@@ -119,8 +133,8 @@ const SettingsScreen: React.FC = () => {
               store.setCurrentSteps(0);
               
               // Reset goals to defaults
-              store.setStepGoal(10000);
-              store.setWaterGoal(2000);
+              await store.setStepGoal(10000);
+              await store.setWaterGoal(2000);
               
               // Reset achievements
               store.resetAchievements();
@@ -154,7 +168,7 @@ const SettingsScreen: React.FC = () => {
                 dailyWaterMl: 2000,
               });
               
-              // Save default settings
+              // Save default settings (with onboarding reset)
               await StorageService.saveSettings({
                 unit: 'metric',
                 theme: 'auto',
@@ -163,11 +177,52 @@ const SettingsScreen: React.FC = () => {
                 hasCompletedOnboarding: false,
               });
               
+              // Clear user profile
+              await AsyncStorage.removeItem('@stepwater:user_profile');
+              
+              // Clear onboarding flag
+              await AsyncStorage.removeItem('@stepwater:onboarding_completed');
+              
               // Save reset achievements
               await StorageService.saveAchievements({
                 lastAchievementStep: false,
                 lastAchievementWater: false,
               });
+              
+              // Reset native service data on Android
+              if (Platform.OS === 'android') {
+                try {
+                  // Try to use resetAllData if available (requires app rebuild)
+                  // Otherwise, manually reset using existing methods
+                  if (typeof (nativeStepWaterService as any).service?.resetAllData === 'function') {
+                    await nativeStepWaterService.resetAllData();
+                  } else {
+                    // Workaround: Manually reset by setting goals and water to 0
+                    // Get current water to subtract it
+                    const currentWater = await nativeStepWaterService.getCurrentWater();
+                    if (currentWater > 0) {
+                      // Subtract current water to reset to 0
+                      await nativeStepWaterService.updateWater(-currentWater);
+                    }
+                    // Reset goals to defaults (this will also update the service)
+                    await nativeStepWaterService.setStepGoal(10000);
+                    await nativeStepWaterService.setWaterGoal(2000);
+                    await nativeStepWaterService.setWaterUnit('ml');
+                    // Note: Steps will reset when service restarts or at midnight
+                    // For immediate reset, we'd need the resetAllData method after rebuild
+                  }
+                  // Small delay to ensure reset completed
+                  await new Promise(resolve => setTimeout(resolve, 300));
+                  // Restart service to apply reset
+                  const isRunning = await nativeStepWaterService.isServiceRunning();
+                  if (!isRunning) {
+                    await nativeStepWaterService.startService();
+                  }
+                } catch (nativeError) {
+                  console.warn('Error resetting native service data:', nativeError);
+                  // Continue anyway - local data is already cleared
+                }
+              }
               
               Alert.alert(
                 'Data Deleted',

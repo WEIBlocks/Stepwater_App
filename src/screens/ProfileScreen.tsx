@@ -135,8 +135,8 @@ const ProfileScreen: React.FC = () => {
               store.setCurrentSteps(0);
               
               // Reset goals to defaults
-              store.setStepGoal(10000);
-              store.setWaterGoal(2000);
+              await store.setStepGoal(10000);
+              await store.setWaterGoal(2000);
               
               // Reset achievements
               store.resetAchievements();

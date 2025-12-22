@@ -12,9 +12,11 @@
     "build:ios:preview": "eas build --platform ios --profile preview",
     "build:ios:production": "eas build --platform ios --profile production",
     "submit:android": "eas submit --platform android --profile production",
-    "submit:ios": "eas submit --platform ios --profile production"
+    "submit:ios": "eas submit --platform ios --profile production",
+    "verify:preview": "node verify-preview-build.js"
   },
   "dependencies": {
+    "@expo/config-plugins": "^54.0.4",
     "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-navigation/bottom-tabs": "^6.5.11",

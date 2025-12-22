@@ -6,7 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../state/store';
 import { StorageService } from '../services/storage';
-import { ForegroundServiceManager } from '../services/foregroundServiceManager';
+import { nativeStepWaterService } from '../services/nativeStepWaterService';
 import { PedometerService } from '../services/pedometer';
 import { NotificationService } from '../services/notifications';
 
@@ -145,6 +145,10 @@ const AppNavigator = () => {
   const navigationRef = useNavigationContainerRef();
   const appStateRef = useRef(RNAppState.currentState);
   const hasRestoredDataRef = useRef(false);
+  // Track pending navigation to handle it after state updates
+  const pendingNavigation = useRef<'GenderSelection' | 'ProfileSetup' | 'Main' | null>(null);
+  // Track if navigation reset is in progress to prevent multiple simultaneous resets
+  const isResettingNavigation = useRef(false);
 
   // Check user setup status
   const checkSetup = async (skipLoadingState = false) => {
@@ -206,11 +210,14 @@ const AppNavigator = () => {
       // Check setup status silently (in case user deleted data)
       await checkSetup(true);
 
-      // Ensure services are running
-      if (Platform.OS === 'android' && !ForegroundServiceManager.isServiceRunning()) {
-        ForegroundServiceManager.start().catch(err => {
-          console.warn('Silent refresh foreground service start failed:', err);
-        });
+      // Ensure native service is running
+      if (Platform.OS === 'android') {
+        const isRunning = await nativeStepWaterService.isServiceRunning();
+        if (!isRunning) {
+          await nativeStepWaterService.startService().catch(err => {
+            console.warn('Silent refresh native service start failed:', err);
+          });
+        }
       }
     } catch (error) {
       console.warn('Silent refresh error:', error);
@@ -276,13 +283,13 @@ const AppNavigator = () => {
         NotificationService.requestPermissions().catch(err => console.warn('Notification permissions failed:', err)),
       ]);
 
-      // Restore background/foreground services
+      // Restore native service
       if (Platform.OS === 'android') {
         setTimeout(async () => {
           try {
-            await ForegroundServiceManager.start();
+            await nativeStepWaterService.startService();
           } catch (error) {
-            console.warn('Foreground service start failed:', error);
+            console.warn('Native service start failed:', error);
           }
         }, 500);
       }
@@ -324,15 +331,28 @@ const AppNavigator = () => {
 
   // Navigate to appropriate screen after splash is hidden on cold launch
   useEffect(() => {
-    if (!showSplash && !isLoading && isColdLaunch && navigationRef.isReady()) {
+    if (!showSplash && !isLoading && isColdLaunch && navigationRef.isReady() && !isResettingNavigation.current) {
       const targetRoute = getInitialRouteName();
       const currentRoute = navigationRef.getCurrentRoute();
       
       // Only navigate if we're not already on the correct route
       if (currentRoute?.name !== targetRoute && currentRoute?.name !== 'Splash') {
-        navigationRef.reset({
-          index: 0,
-          routes: [{ name: targetRoute }],
+        isResettingNavigation.current = true;
+        // Use requestAnimationFrame to ensure view hierarchy is stable
+        requestAnimationFrame(() => {
+          try {
+            navigationRef.reset({
+              index: 0,
+              routes: [{ name: targetRoute }],
+            });
+          } catch (error) {
+            console.warn('Navigation reset error:', error);
+          } finally {
+            // Reset flag after a short delay
+            setTimeout(() => {
+              isResettingNavigation.current = false;
+            }, 100);
+          }
         });
       }
     }
@@ -344,26 +364,39 @@ const AppNavigator = () => {
   const prevHasCompletedProfile = useRef(hasCompletedProfile);
   
   useEffect(() => {
-    if (!isLoading && navigationRef.isReady()) {
+    if (!isLoading && navigationRef.isReady() && !isResettingNavigation.current) {
       // Only reset if transitioning from completed to not completed (data was deleted)
       const wasCompleted = prevHasCompletedOnboarding.current && prevHasCompletedProfile.current;
       const isNotCompleted = !hasCompletedOnboarding || !hasCompletedProfile;
       
       if (wasCompleted && isNotCompleted) {
-        // Data was deleted - reset to onboarding flow
-        if (!hasCompletedOnboarding) {
-          navigationRef.reset({
-            index: 0,
-            routes: [{ name: 'Onboarding' }],
-          });
-        } else if (!hasCompletedProfile) {
-          // Navigate to appropriate screen in profile setup flow
-          const targetRoute = selectedGender === 'pending' ? 'GenderSelection' : 'ProfileSetup';
-          navigationRef.reset({
-            index: 0,
-            routes: [{ name: targetRoute }],
-          });
-        }
+        isResettingNavigation.current = true;
+        // Use requestAnimationFrame to ensure view hierarchy is stable
+        requestAnimationFrame(() => {
+          try {
+            // Data was deleted - reset to onboarding flow
+            if (!hasCompletedOnboarding) {
+              navigationRef.reset({
+                index: 0,
+                routes: [{ name: 'Onboarding' }],
+              });
+            } else if (!hasCompletedProfile) {
+              // Navigate to appropriate screen in profile setup flow
+              const targetRoute = selectedGender === 'pending' ? 'GenderSelection' : 'ProfileSetup';
+              navigationRef.reset({
+                index: 0,
+                routes: [{ name: targetRoute }],
+              });
+            }
+          } catch (error) {
+            console.warn('Navigation reset error:', error);
+          } finally {
+            // Reset flag after a short delay
+            setTimeout(() => {
+              isResettingNavigation.current = false;
+            }, 100);
+          }
+        });
       }
       
       // Update refs for next comparison
@@ -383,12 +416,25 @@ const AppNavigator = () => {
     };
   }, [checkSetup]);
 
-  // Track pending navigation to handle it after state updates
-  const pendingNavigation = useRef<'GenderSelection' | 'ProfileSetup' | 'Main' | null>(null);
+  // Function to reset gender selection - allows ProfileSetupScreen to go back to GenderSelection
+  const resetGenderSelection = React.useCallback(() => {
+    setSelectedGender('pending');
+    // Queue navigation to happen after state update (useLayoutEffect will handle it)
+    pendingNavigation.current = 'GenderSelection';
+  }, []);
+
+  // Expose resetGenderSelection globally so ProfileSetupScreen can access it
+  useEffect(() => {
+    (global as any).__appNavigatorResetGenderSelection = resetGenderSelection;
+    
+    return () => {
+      delete (global as any).__appNavigatorResetGenderSelection;
+    };
+  }, [resetGenderSelection]);
 
   // Navigate after state updates are processed (runs synchronously before paint)
   useLayoutEffect(() => {
-    if (pendingNavigation.current && navigationRef.isReady() && !isLoading) {
+    if (pendingNavigation.current && navigationRef.isReady() && !isLoading && !isResettingNavigation.current) {
       const nextScreen = pendingNavigation.current;
       
       // Verify the target screen should be available before navigating
@@ -406,6 +452,7 @@ const AppNavigator = () => {
       
       if (shouldNavigate) {
         pendingNavigation.current = null;
+        isResettingNavigation.current = true;
         try {
           navigationRef.reset({
             index: 0,
@@ -413,6 +460,11 @@ const AppNavigator = () => {
           });
         } catch (error) {
           console.warn(`Navigation to ${nextScreen} failed:`, error);
+        } finally {
+          // Reset flag after a short delay
+          setTimeout(() => {
+            isResettingNavigation.current = false;
+          }, 100);
         }
       } else {
         // If screen isn't ready yet, keep the pending navigation for next render
@@ -495,28 +547,9 @@ const AppNavigator = () => {
     <NavigationContainer
       ref={navigationRef}
       onReady={() => {
-        // Ensure navigation is locked to the correct route based on completion status
-        // When returning from background, always go to Home (never show splash/onboarding)
-        if (!isColdLaunch) {
-          // Returning from background - always navigate to Home (skip splash/onboarding)
-          // This ensures smooth UX when reopening from background or recent apps
-          const currentRoute = navigationRef.getCurrentRoute();
-          if (currentRoute?.name !== 'Main' && hasCompletedOnboarding && hasCompletedProfile) {
-            navigationRef.reset({
-              index: 0,
-              routes: [{ name: 'Main' }],
-            });
-          }
-        } else if (!isSetupComplete && !showSplash) {
-          // Cold launch - navigate to appropriate setup screen (after splash is hidden)
-          const initialRoute = getInitialRouteName();
-          if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name !== initialRoute) {
-            navigationRef.reset({
-              index: 0,
-              routes: [{ name: initialRoute }],
-            });
-          }
-        }
+        // Navigation is ready - let the useEffects handle navigation logic
+        // This callback is mainly for tracking readiness, not for navigation resets
+        // to avoid race conditions with multiple reset calls
       }}
     >
       <Stack.Navigator 

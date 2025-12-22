@@ -3,7 +3,8 @@ import { generateUUIDSecure } from '../utils/uuid';
 import { DaySummary, WaterLogItem, UserGoals, Reminder, AppSettings, PedometerResult } from '../types';
 import { StorageService } from '../services/storage';
 import { getTodayDateString } from '../utils/formatting';
-import { ForegroundServiceManager } from '../services/foregroundServiceManager';
+import { nativeStepWaterService } from '../services/nativeStepWaterService';
+import { Platform } from 'react-native';
 
 interface AppState {
   // State
@@ -23,10 +24,11 @@ interface AppState {
 
   // Actions
   setCurrentSteps: (steps: number) => void;
+  syncFromNativeService: () => Promise<void>;
   pauseStepTracking: () => void;
   resumeStepTracking: () => void;
-  setStepGoal: (goal: number) => void;
-  setWaterGoal: (goal: number) => void;
+  setStepGoal: (goal: number) => Promise<void>;
+  setWaterGoal: (goal: number) => Promise<void>;
   addWater: (amountMl: number) => Promise<void>;
   deleteWaterLog: (id: string) => Promise<void>;
   loadTodayData: () => Promise<void>;
@@ -36,7 +38,7 @@ interface AppState {
   saveReminders: () => Promise<void>;
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
-  setSettings: (settings: Partial<AppSettings>) => void;
+  setSettings: (settings: Partial<AppSettings>) => Promise<void>;
   setPedometerAvailable: (available: boolean) => void;
   setLoading: (loading: boolean) => void;
   resetAchievements: () => void;
@@ -91,20 +93,7 @@ export const useStore = create<AppState>((set, get) => ({
     // Single set() call ensures immediate re-render
     set(updates);
     
-    // Update foreground notification immediately when steps change
-    // This ensures the notification reflects the new step count instantly
-    const state = get();
-    const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
-    ForegroundServiceManager.triggerUpdate(
-      steps,
-      state.stepGoal,
-      state.waterConsumed,
-      state.waterGoal,
-      waterUnit
-    ).catch((error) => {
-      // Log error but don't block - notification update is non-critical
-      console.warn('Failed to update foreground notification:', error);
-    });
+    // NOTE: Notification updates are handled by native service - no JS updates needed
     
     // Save to storage AFTER updating store (non-blocking, async)
     // DO NOT reload from storage - currentSteps is the source of truth
@@ -141,38 +130,53 @@ export const useStore = create<AppState>((set, get) => ({
     });
   },
 
-  setStepGoal: (goal: number) => {
-    set({ stepGoal: goal });
-    
-    // Update foreground notification immediately when step goal changes
-    const state = get();
-    const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
-    ForegroundServiceManager.triggerUpdate(
-      state.currentSteps,
-      goal,
-      state.waterConsumed,
-      state.waterGoal,
-      waterUnit
-    ).catch((error) => {
-      console.warn('Failed to update foreground notification:', error);
-    });
+  syncFromNativeService: async () => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    try {
+      // Read current values from native service (source of truth)
+      const [nativeSteps, nativeWater] = await Promise.all([
+        nativeStepWaterService.getCurrentSteps(),
+        nativeStepWaterService.getCurrentWater(),
+      ]);
+
+      const prevSteps = get().currentSteps;
+      const prevWater = get().waterConsumed;
+
+      // Update steps if changed
+      if (nativeSteps !== prevSteps) {
+        get().setCurrentSteps(nativeSteps);
+      }
+
+      // Update water if changed
+      if (nativeWater !== prevWater) {
+        set({ waterConsumed: nativeWater });
+      }
+    } catch (error) {
+      console.error('Error syncing from native service:', error);
+    }
   },
 
-  setWaterGoal: (goal: number) => {
+  setStepGoal: async (goal: number) => {
+    set({ stepGoal: goal });
+    // Sync goal to native service
+    if (Platform.OS === 'android') {
+      await nativeStepWaterService.setStepGoal(goal).catch((error) => {
+        console.warn('Failed to sync step goal to native service:', error);
+      });
+    }
+  },
+
+  setWaterGoal: async (goal: number) => {
     set({ waterGoal: goal });
-    
-    // Update foreground notification immediately when water goal changes
-    const state = get();
-    const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
-    ForegroundServiceManager.triggerUpdate(
-      state.currentSteps,
-      state.stepGoal,
-      state.waterConsumed,
-      goal,
-      waterUnit
-    ).catch((error) => {
-      console.warn('Failed to update foreground notification:', error);
-    });
+    // Sync goal to native service
+    if (Platform.OS === 'android') {
+      await nativeStepWaterService.setWaterGoal(goal).catch((error) => {
+        console.warn('Failed to sync water goal to native service:', error);
+      });
+    }
   },
 
   addWater: async (amountMl: number) => {
@@ -194,6 +198,14 @@ export const useStore = create<AppState>((set, get) => ({
       const hadAchieved = prevConsumed >= waterGoal;
       const nowAchieved = newConsumed >= waterGoal;
 
+      // Update native service FIRST (source of truth)
+      // This will immediately update the notification
+      if (Platform.OS === 'android') {
+        await nativeStepWaterService.updateWater(amountMl).catch((error) => {
+          console.warn('Failed to update native service:', error);
+        });
+      }
+
       // Update state immediately for responsive UI
       const currentLogs = get().waterLogs || [];
       set({ 
@@ -205,21 +217,6 @@ export const useStore = create<AppState>((set, get) => ({
       if (!hadAchieved && nowAchieved && !get().lastAchievementWater) {
         set({ lastAchievementWater: true });
       }
-
-      // Update foreground notification immediately when water is added
-      // This ensures the notification reflects the new water amount instantly
-      const state = get();
-      const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
-      ForegroundServiceManager.triggerUpdate(
-        state.currentSteps,
-        state.stepGoal,
-        newConsumed,
-        state.waterGoal,
-        waterUnit
-      ).catch((error) => {
-        // Log error but don't block - notification update is non-critical
-        console.warn('Failed to update foreground notification:', error);
-      });
 
       // Save to storage (async, non-blocking)
       // Errors are handled internally - don't let them propagate
@@ -276,20 +273,14 @@ export const useStore = create<AppState>((set, get) => ({
     
     set({ waterConsumed: newConsumed, waterLogs: newLogs });
 
-    // Update foreground notification immediately when water is deleted
-    // This ensures the notification reflects the updated water amount instantly
-    const state = get();
-    const waterUnit = state.settings.unit === 'imperial' ? 'oz' : 'ml';
-    ForegroundServiceManager.triggerUpdate(
-      state.currentSteps,
-      state.stepGoal,
-      newConsumed,
-      state.waterGoal,
-      waterUnit
-    ).catch((error) => {
-      // Log error but don't block - notification update is non-critical
-      console.warn('Failed to update foreground notification:', error);
-    });
+    // Update native service with new total (negative amount to subtract)
+    // Note: Native service uses additive updates, so we need to set the absolute value
+    // For now, we'll sync the total by reading from native after deletion
+    // This is a limitation - ideally native service would support setWater()
+    if (Platform.OS === 'android') {
+      // Sync from native to ensure consistency
+      await get().syncFromNativeService();
+    }
 
     // Update today's summary
     const summary = get().todaySummary;
@@ -307,14 +298,33 @@ export const useStore = create<AppState>((set, get) => ({
     const logs = await StorageService.getWaterLogs(today);
     const totalWaterFromLogs = logs.reduce((sum, log) => sum + log.amountMl, 0);
     
-    // Keep the highest value between stored and in-memory steps so we NEVER go backwards to 0
-    const inMemorySteps = get().currentSteps || 0;
-    const storedSteps = summary?.steps ?? 0;
-    const stepsToUse = Math.max(storedSteps, inMemorySteps);
+    // On Android, native service is the source of truth
+    let stepsToUse = summary?.steps ?? 0;
+    let waterToUse = totalWaterFromLogs;
+    
+    if (Platform.OS === 'android') {
+      try {
+        // Read from native service (source of truth)
+        const [nativeSteps, nativeWater] = await Promise.all([
+          nativeStepWaterService.getCurrentSteps(),
+          nativeStepWaterService.getCurrentWater(),
+        ]);
+        
+        // Use native values, but keep highest to prevent going backwards
+        stepsToUse = Math.max(stepsToUse, nativeSteps);
+        waterToUse = Math.max(waterToUse, nativeWater);
+      } catch (error) {
+        console.warn('Failed to read from native service, using stored values:', error);
+      }
+    } else {
+      // iOS or other platforms - use stored values
+      const inMemorySteps = get().currentSteps || 0;
+      const storedSteps = summary?.steps ?? 0;
+      stepsToUse = Math.max(storedSteps, inMemorySteps);
 
-    // Do the same for water: prefer the higher of logs vs. in-memory
-    const inMemoryWater = get().waterConsumed || 0;
-    const waterToUse = Math.max(totalWaterFromLogs, inMemoryWater);
+      const inMemoryWater = get().waterConsumed || 0;
+      waterToUse = Math.max(totalWaterFromLogs, inMemoryWater);
+    }
 
     set({
       todaySummary: summary
@@ -374,10 +384,18 @@ export const useStore = create<AppState>((set, get) => ({
     await StorageService.saveSettings(settings);
   },
 
-  setSettings: (newSettings: Partial<AppSettings>) => {
+  setSettings: async (newSettings: Partial<AppSettings>) => {
     set(state => ({
       settings: { ...state.settings, ...newSettings },
     }));
+    
+    // Sync water unit to native service if unit changed
+    if (newSettings.unit && Platform.OS === 'android') {
+      const waterUnit = newSettings.unit === 'imperial' ? 'oz' : 'ml';
+      await nativeStepWaterService.setWaterUnit(waterUnit).catch((error) => {
+        console.warn('Failed to sync water unit to native service:', error);
+      });
+    }
   },
 
   setPedometerAvailable: (available: boolean) => {

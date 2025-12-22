@@ -12,6 +12,7 @@ interface HeaderProps {
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
   showBackButton?: boolean;
+  onBackPress?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -20,11 +21,14 @@ const Header: React.FC<HeaderProps> = ({
   rightIcon,
   onRightIconPress,
   showBackButton = true,
+  onBackPress,
 }) => {
   const navigation = useNavigation();
 
   const handleBackPress = () => {
-    if (navigation.canGoBack()) {
+    if (onBackPress) {
+      onBackPress();
+    } else if (navigation.canGoBack()) {
       navigation.goBack();
     }
   };

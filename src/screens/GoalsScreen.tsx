@@ -60,9 +60,9 @@ const GoalsScreen: React.FC = () => {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setStepGoal(steps);
+    await setStepGoal(steps);
     const waterMl = settings.unit === 'imperial' ? water * 29.5735 : water;
-    setWaterGoal(waterMl);
+    await setWaterGoal(waterMl);
     await saveGoals();
 
     Alert.alert('Success', 'Goals updated successfully!');

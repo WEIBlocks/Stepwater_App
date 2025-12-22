@@ -145,10 +145,33 @@ const HomeScreen: React.FC = () => {
   }, [currentSteps]);
 
   useEffect(() => {
-    if (allSummaries.length > 0) {
-      const stats = calculateStatistics(allSummaries, stepGoal, waterGoal);
-      setStatistics(stats);
+    // Always calculate statistics, even with empty data (will return zeros)
+    // This ensures cards are always visible, even for new users
+    // Merge today's live data into summaries for accurate statistics
+    const today = new Date().toISOString().split('T')[0];
+    const summariesWithLiveData = [...allSummaries];
+    const todayIndex = summariesWithLiveData.findIndex(s => s.date === today);
+    
+    if (todayIndex >= 0) {
+      // Update today's summary with live data
+      summariesWithLiveData[todayIndex] = {
+        ...summariesWithLiveData[todayIndex],
+        steps: currentSteps,
+        waterMl: waterConsumed,
+      };
+    } else {
+      // Add today's summary if it doesn't exist
+      summariesWithLiveData.push({
+        date: today,
+        steps: currentSteps,
+        waterMl: waterConsumed,
+        stepDistanceMeters: currentSteps * 0.762,
+        calories: Math.round(currentSteps * 0.04),
+      });
     }
+    
+    const stats = calculateStatistics(summariesWithLiveData, stepGoal, waterGoal);
+    setStatistics(stats);
   }, [allSummaries, stepGoal, waterGoal, currentSteps, waterConsumed]);
 
   const loadDashboardData = async () => {
@@ -425,18 +448,16 @@ const HomeScreen: React.FC = () => {
         </View>
 
         {/* Weekly Progress */}
-        {allSummaries.length > 0 && (
-                  <View style={styles.weeklySection}>
-                    <WeeklyProgress
-                      summaries={allSummaries}
-                      stepGoal={stepGoal}
-                      waterGoal={waterGoal}
-                      type="steps"
-                      currentSteps={currentSteps}
-                      waterConsumed={waterConsumed}
-                    />
-                  </View>
-                )}
+        <View style={styles.weeklySection}>
+          <WeeklyProgress
+            summaries={allSummaries}
+            stepGoal={stepGoal}
+            waterGoal={waterGoal}
+            type="steps"
+            currentSteps={currentSteps}
+            waterConsumed={waterConsumed}
+          />
+        </View>
 
         
 

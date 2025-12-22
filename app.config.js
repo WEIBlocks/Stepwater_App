@@ -1,9 +1,12 @@
 module.exports = {
   expo: {
+    owner: "organization-s", // <-- ADD THIS LINE
     name: "Step & Water",
     slug: "step-water-app",
     version: "1.0.0",
     orientation: "portrait",
+    // Production optimizations
+    jsEngine: "hermes",
     // App icon and splash screen configuration
     // For production: Add icon.png (1024x1024px) and splash.png (2048x2048px) to assets folder
     // If assets are missing, Expo will use default icons (app will still work)
@@ -37,7 +40,7 @@ module.exports = {
         "ACTIVITY_RECOGNITION",
         "POST_NOTIFICATIONS",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_HEALTH",
+        "FOREGROUND_SERVICE_DATA_SYNC",
         "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED",
         "ACCESS_FINE_LOCATION"
@@ -51,7 +54,9 @@ module.exports = {
           action: "android.intent.action.MAIN",
           category: ["android.intent.category.LAUNCHER"]
         }
-      ]
+      ],
+      // Production build optimizations
+      allowBackup: true
     },
     plugins: [
       "expo-notifications",
@@ -62,10 +67,22 @@ module.exports = {
             minSdkVersion: 23,
             compileSdkVersion: 34,
             targetSdkVersion: 34,
-            buildToolsVersion: "34.0.0"
+            buildToolsVersion: "34.0.0",
+            // Production build optimizations
+            enableProguardInReleaseBuilds: false,
+            enableShrinkResourcesInReleaseBuilds: false,
+            // Ensure proper Java version
+            javaVersion: "17",
+            // ProGuard rules (will be applied if ProGuard is enabled)
+            proguardFiles: ["proguard-rules.pro"]
+          },
+          ios: {
+            // iOS build optimizations
+            deploymentTarget: "13.4"
           }
         }
-      ]
+      ],
+      "./plugins/withStepWaterService.js"
     ],
     // EAS project ID removed - not required for Expo Go
     // Only needed when building with EAS Build

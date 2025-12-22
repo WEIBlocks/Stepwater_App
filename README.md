@@ -113,8 +113,8 @@ A modern, beautiful, and feature-rich cross-platform mobile app built with Expo 
 - **Offline Support**: Full functionality works without internet connection
 - **Cloud Sync**: Optional Supabase integration for data synchronization across devices
 - **Data Export/Import**: Backup and restore your data
-- **Foreground Service** (Android): Persistent notification for step tracking
-- **Background Tasks**: Background step counting where supported
+- **Foreground Service** (Android): Native foreground service with persistent notification for step & water tracking
+- **Background Tasks**: Background step counting and water updates via native Android service (development/custom build required)
 - **Error Recovery**: Automatic data recovery and restoration
 - **Unit Conversion**: Support for metric and imperial units
 
@@ -267,6 +267,10 @@ Before you begin, ensure you have the following installed:
 - **Android Emulator** - Requires Android Studio
 - **Expo Go App** (optional) - For testing on physical devices
 
+> **Android Native Service Note**  
+> The native foreground service **does not run in Expo Go**.  
+> To use persistent background tracking on Android, you must run a **development/custom build** (for example: `npx expo run:android` or an EAS development/production build).
+
 ### Installation
 
 1. **Clone the repository:**
@@ -358,6 +362,50 @@ EAS build configuration is in `eas.json`:
 - **Development**: Development client builds
 - **Preview**: Internal distribution builds
 - **Production**: Production builds with auto-increment
+
+---
+
+## ⚙️ Native Android Foreground Service
+
+### Overview
+
+The app includes a **native Android foreground service** that:
+
+- Keeps step and water tracking running in the background
+- Shows a persistent "Step & Water" notification with live progress
+- Automatically restarts after device reboot (via a boot receiver)
+- Stores step, water, and goal data natively for better reliability
+
+The native module lives in `modules/StepWaterService`, and React Native uses it through `src/services/nativeStepWaterService.ts`.
+
+### Requirements
+
+- **Android only** – iOS uses the standard Expo/JS flow
+- **Development or custom build required** – **Expo Go is not supported**
+- Already configured for **minSdk 23** and **targetSdk 34** in `app.config.js`
+
+### Running with Native Service Enabled
+
+To run the app with the native foreground service:
+
+```bash
+# Local development build (recommended for testing native service)
+npx expo run:android
+
+# or, using EAS development build
+eas build --profile development --platform android
+```
+
+On first launch, grant:
+- **Activity Recognition** permission
+- **Notifications** permission
+
+You should then see a persistent **Step & Water** notification that updates as you walk and log water.
+
+> For detailed implementation and troubleshooting, see:
+> - `NATIVE_SERVICE_SETUP.md`
+> - `NATIVE_SERVICE_IMPLEMENTATION.md`
+> - `QUICK_START_NATIVE_SERVICE.md`
 
 ---
 
@@ -609,11 +657,10 @@ Configured in `app.config.js` → `ios.infoPlist`.
 The app requires the following permissions on Android:
 
 - **ACTIVITY_RECOGNITION**: Required for step tracking (Android 10+)
-- **POST_NOTIFICATIONS**: For water reminders (Android 13+)
-- **FOREGROUND_SERVICE**: For persistent step tracking notification
-- **FOREGROUND_SERVICE_HEALTH**: For health-related foreground service
-- **WAKE_LOCK**: For background step tracking
-- **RECEIVE_BOOT_COMPLETED**: For restarting services after device reboot
+- **POST_NOTIFICATIONS**: For water reminders and native foreground notification (Android 13+)
+- **FOREGROUND_SERVICE** / **FOREGROUND_SERVICE_DATA_SYNC**: For persistent native step & water tracking notification
+- **WAKE_LOCK**: For keeping the native service running in the background
+- **RECEIVE_BOOT_COMPLETED**: For restarting native services after device reboot
 - **ACCESS_FINE_LOCATION**: For distance calculation (optional)
 
 Configured in `app.config.js` → `android.permissions`.

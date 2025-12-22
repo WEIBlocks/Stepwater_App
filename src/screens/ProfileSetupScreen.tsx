@@ -272,12 +272,41 @@ const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
   // Weight options: 20-120 kg (in 1 kg increments for better performance)
   const kgOptions = Array.from({ length: 101 }, (_, i) => 20 + i);
 
+  // Handle back button navigation - during setup, go back to GenderSelection
+  const handleBackPress = () => {
+    if (isEditing) {
+      // When editing, use normal back navigation
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+    } else {
+      // During setup, reset gender selection state and navigate to GenderSelection
+      // This ensures the GenderSelection screen is available in the stack
+      const resetGenderSelection = (global as any).__appNavigatorResetGenderSelection;
+      if (resetGenderSelection) {
+        resetGenderSelection();
+      } else {
+        // Fallback: try to navigate (might fail if screen not in stack)
+        try {
+          navigation.navigate('GenderSelection');
+        } catch (error) {
+          console.warn('Failed to navigate to GenderSelection:', error);
+          // If navigation fails, try reset
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'GenderSelection' }],
+          });
+        }
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={[]}>
       <Header
         title="My Profile"
         subtitle="Set up your profile information"
-        rightIcon="person-add"
+        onBackPress={handleBackPress}
       />
       <Animated.View style={styles.content}>
         {/* Profile Avatar Section */}
