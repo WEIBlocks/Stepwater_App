@@ -12,6 +12,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { COLORS } from '../utils/constants';
 import { theme } from '../utils/theme';
+import { rs, rp, rm, rf } from '../utils/responsive';
 
 interface FABProps {
   onPress: () => void;
@@ -178,31 +179,31 @@ const FAB: React.FC<FABProps> = ({ onPress, icon = '+', label }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 32,
-    right: 24,
+    bottom: rp(32),
+    right: rp(24),
     zIndex: 1000,
   },
   fab: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: rs(64),
+    height: rs(64),
+    borderRadius: rs(32),
     backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: rs(8) },
+    shadowRadius: rs(16),
     elevation: 8,
   },
   icon: {
-    fontSize: theme.typography.fontSize.valueMedium,
+    fontSize: rf(theme.typography.fontSize.valueMedium),
     color: '#ffffff',
     fontWeight: theme.typography.fontWeight.regular,
   },
   label: {
-    fontSize: theme.typography.fontSize.captionSmall,
+    fontSize: rf(theme.typography.fontSize.captionSmall),
     color: '#ffffff',
-    marginTop: theme.spacing.xs / 2,
+    marginTop: rm(theme.spacing.xs / 2),
   },
 });
 

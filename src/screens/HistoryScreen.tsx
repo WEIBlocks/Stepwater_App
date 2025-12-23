@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import Svg, { Polyline, Circle, Line, G } from 'react-native-svg';
 import { COLORS } from '../utils/constants';
 import { theme } from '../utils/theme';
@@ -25,6 +26,7 @@ const CHART_WIDTH = wp(85);
 const CHART_HEIGHT = hp(20);
 
 const HistoryScreen: React.FC = () => {
+  const navigation = useNavigation();
   const { settings, stepGoal, currentSteps, waterConsumed, loadTodayData } = useStore();
   const [summaries, setSummaries] = useState<DaySummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -516,6 +518,7 @@ const HistoryScreen: React.FC = () => {
       <Header
         title="Stats Overview"
         rightIcon="bar-chart"
+        onBackPress={() => navigation.navigate('Home')}
       />
       <ScrollView
         style={styles.scroll}

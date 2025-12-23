@@ -320,7 +320,7 @@ const HomeScreen: React.FC = () => {
               >
                 <Ionicons
                   name={isStepTrackingPaused ? "play-circle" : "pause-circle"}
-                  size={32}
+                  size={rs(32)}
                   color={theme.colors.steps}
                 />
               </TouchableOpacity>
@@ -352,7 +352,7 @@ const HomeScreen: React.FC = () => {
               {/* Additional Info */}
               <View style={styles.heroInfoRow}>
                 <View style={styles.heroInfoItem}>
-                  <Ionicons name="stats-chart" size={18} color={theme.colors.steps} />
+                  <Ionicons name="stats-chart" size={rs(18)} color={theme.colors.steps} />
                   <Text style={styles.heroInfoText}>
                     {formatSteps(Math.round(stepAverage))} avg
                   </Text>
@@ -398,7 +398,7 @@ const HomeScreen: React.FC = () => {
               {/* Additional Info */}
               <View style={styles.heroInfoRow}>
                 <View style={styles.heroInfoItem}>
-                  <Ionicons name="stats-chart" size={18} color={theme.colors.water} />
+                  <Ionicons name="stats-chart" size={rs(18)} color={theme.colors.water} />
                   <Text style={styles.heroInfoText}>
                     {formatWater(Math.round(waterAverage), settings.unit)} avg
                   </Text>
@@ -408,7 +408,7 @@ const HomeScreen: React.FC = () => {
                   onPress={() => setShowAddWater(true)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="add-circle" size={20} color={theme.colors.water} />
+                  <Ionicons name="add-circle" size={rs(20)} color={theme.colors.water} />
                   <Text style={[styles.heroEditText, { color: theme.colors.water }]}>Add</Text>
                 </TouchableOpacity>
               </View>
@@ -420,7 +420,7 @@ const HomeScreen: React.FC = () => {
         <View style={styles.quickStatsRow}>
           <View style={styles.quickStatCard}>
             <View style={styles.quickStatIconContainer}>
-              <Ionicons name="location" size={28} color={theme.colors.steps} />
+              <Ionicons name="location" size={rs(28)} color={theme.colors.steps} />
             </View>
             <Text style={styles.quickStatValue}>
               {formatDistance(estimatedDistance, settings.unit)}
@@ -429,7 +429,7 @@ const HomeScreen: React.FC = () => {
           </View>
           <View style={styles.quickStatCard}>
             <View style={styles.quickStatIconContainer}>
-              <Ionicons name="flame" size={28} color={theme.colors.steps} />
+              <Ionicons name="flame" size={rs(28)} color={theme.colors.steps} />
             </View>
             <Text style={styles.quickStatValue}>
               {formatCalories(estimatedCalories)}
@@ -438,7 +438,7 @@ const HomeScreen: React.FC = () => {
           </View>
           <View style={styles.quickStatCard}>
             <View style={styles.quickStatIconContainer}>
-              <Ionicons name="time-outline" size={28} color={theme.colors.water} />
+              <Ionicons name="time-outline" size={rs(28)} color={theme.colors.water} />
             </View>
             <Text style={styles.quickStatValue}>
               {Math.round(currentSteps * 0.0005)}h {Math.round((currentSteps * 0.0005 % 1) * 60)}m
@@ -473,7 +473,7 @@ const HomeScreen: React.FC = () => {
                 activeOpacity={0.7}
               >
                 <View style={styles.streakIconContainer}>
-                  <Ionicons name="flame" size={28} color={theme.colors.steps} />
+                  <Ionicons name="flame" size={rs(28)} color={theme.colors.steps} />
                 </View>
                 <View style={styles.streakContent}>
                   <Text style={styles.streakLabel}>STEP STREAK</Text>
@@ -489,7 +489,7 @@ const HomeScreen: React.FC = () => {
                 activeOpacity={0.7}
               >
                 <View style={styles.streakIconContainer}>
-                  <Ionicons name="water" size={28} color={theme.colors.water} />
+                  <Ionicons name="water" size={rs(28)} color={theme.colors.water} />
                 </View>
                 <View style={styles.streakContent}>
                   <Text style={styles.streakLabel}>WATER STREAK</Text>

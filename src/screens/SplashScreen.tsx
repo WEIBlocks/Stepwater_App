@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../utils/theme';
+import { rs, rf } from '../utils/responsive';
 
 interface SplashScreenProps {
   // This screen doesn't need props - it just displays while data is being restored
@@ -115,7 +116,7 @@ const SplashScreen: React.FC<SplashScreenProps> = () => {
         {/* Centered app logo with pulse animation */}
         <Animated.View style={[styles.logoContainer, logoAnimatedStyle]}>
           {/* Simple, elegant logo - using a single icon that represents activity/health */}
-          <Ionicons name="walk" size={56} color={logoColor} />
+          <Ionicons name="walk" size={rs(56)} color={logoColor} />
         </Animated.View>
       </View>
     </SafeAreaView>
@@ -134,18 +135,18 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   logoContainer: {
-    width: 120,
-    height: 120,
+    width: rs(120),
+    height: rs(120),
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
   },
   ring: {
     position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 1.5,
+    width: rs(160),
+    height: rs(160),
+    borderRadius: rs(80),
+    borderWidth: rs(1.5),
     zIndex: 1,
   },
 });

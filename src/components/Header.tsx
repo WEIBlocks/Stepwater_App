@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../utils/theme';
-import { rp, rm, rs } from '../utils/responsive';
+import { rp, rm, rs, rf } from '../utils/responsive';
 
 interface HeaderProps {
   title: string;
@@ -121,14 +121,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: rp(8),
   },
   title: {
-    fontSize: theme.typography.fontSize.title,
+    fontSize: rf(theme.typography.fontSize.title),
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.textPrimary,
     textAlign: 'center',
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: theme.typography.fontSize.bodySmall,
+    fontSize: rf(theme.typography.fontSize.bodySmall),
     color: theme.colors.textSecondary,
     fontWeight: theme.typography.fontWeight.medium,
     textAlign: 'center',

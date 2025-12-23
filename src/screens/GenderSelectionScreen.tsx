@@ -259,7 +259,7 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
             ]}
           >
             <View style={styles.genderSymbolContainer}>
-              <Svg width={60} height={60} viewBox="0 0 60 60">
+              <Svg width={rs(60)} height={rs(60)} viewBox="0 0 60 60">
                 <Circle
                   cx="30"
                   cy="30"
@@ -461,25 +461,25 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: rp(24),
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: rp(16),
+    paddingBottom: rp(8),
   },
   skipButton: {
-    padding: 8,
+    padding: rp(8),
   },
   skipText: {
-    fontSize: 16,
+    fontSize: rf(16),
     color: '#FFFFFF',
     fontWeight: '500',
   },
   titleSection: {
-    marginTop: 40,
-    marginBottom: 60,
+    marginTop: rm(40),
+    marginBottom: rm(60),
     alignItems: 'center',
   },
   title: {
@@ -512,12 +512,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: rp(24),
     borderRadius: rs(20),
-    borderWidth: 2,
+    borderWidth: rs(2),
     backgroundColor: '#1E293B',
     minWidth: rs(140),
   },
   genderOptionSelected: {
-    borderWidth: 2.5,
+    borderWidth: rs(2.5),
   },
   genderCircle: {
     width: rs(80),
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
     padding: rp(24),
     width: '100%',
     maxWidth: rs(400),
-    borderWidth: 1,
+    borderWidth: rs(1),
     borderColor: '#334155',
   },
   modalTitle: {
@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
   modalButton: {
     padding: rp(16),
     borderRadius: rs(12),
-    borderWidth: 2,
+    borderWidth: rs(2),
     backgroundColor: '#0F172A',
   },
   mergeButton: {

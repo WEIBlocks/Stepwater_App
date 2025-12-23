@@ -11,6 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useReminders } from '../hooks/useReminders';
 import { Reminder } from '../types';
@@ -24,6 +25,7 @@ import { Header } from '../components';
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const RemindersScreen: React.FC = () => {
+  const navigation = useNavigation();
   const { reminders, addReminder, updateReminder, deleteReminder } = useReminders();
   const [newReminder, setNewReminder] = useState({
     time: '09:00',
@@ -132,6 +134,7 @@ const RemindersScreen: React.FC = () => {
         title="Reminders"
         subtitle="Stay hydrated throughout the day"
         rightIcon="notifications"
+        onBackPress={() => navigation.navigate('Goals')}
       />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
@@ -147,7 +150,7 @@ const RemindersScreen: React.FC = () => {
               activeOpacity={0.7}
             >
               <Text style={styles.timeInputText}>{newReminder.time}</Text>
-              <Ionicons name="time-outline" size={24} color={theme.colors.primary} />
+              <Ionicons name="time-outline" size={rs(24)} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -212,7 +215,7 @@ const RemindersScreen: React.FC = () => {
                 onPress={() => setShowTimePicker(false)}
                 style={styles.modalCloseButton}
               >
-                <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
+                <Ionicons name="close" size={rs(24)} color={theme.colors.textPrimary} />
               </TouchableOpacity>
             </View>
 

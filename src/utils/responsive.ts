@@ -19,9 +19,16 @@ export const hp = (percentage: number): number => {
 // Responsive font size (scales based on screen width)
 export const rf = (size: number): number => {
   const scale = SCREEN_WIDTH / BASE_WIDTH;
-  const newSize = size * scale;
+  let newSize = size * scale;
   
   // Limit scaling to prevent too large/small text
+  // Minimum: 0.85x (for very small devices)
+  // Maximum: 1.3x (for tablets/large devices)
+  const minScale = 0.85;
+  const maxScale = 1.3;
+  const clampedScale = Math.max(minScale, Math.min(maxScale, scale));
+  newSize = size * clampedScale;
+  
   if (Platform.OS === 'ios') {
     return Math.round(PixelRatio.roundToNearestPixel(newSize));
   }
@@ -31,7 +38,16 @@ export const rf = (size: number): number => {
 // Responsive size (for icons, circles, etc.)
 export const rs = (size: number): number => {
   const scale = Math.min(SCREEN_WIDTH / BASE_WIDTH, SCREEN_HEIGHT / BASE_HEIGHT);
-  const newSize = size * scale;
+  let newSize = size * scale;
+  
+  // Limit scaling for better small/large device handling
+  // Minimum: 0.8x (for very small devices)
+  // Maximum: 1.4x (for tablets/large devices)
+  const minScale = 0.8;
+  const maxScale = 1.4;
+  const clampedScale = Math.max(minScale, Math.min(maxScale, scale));
+  newSize = size * clampedScale;
+  
   return Math.round(PixelRatio.roundToNearestPixel(newSize));
 };
 

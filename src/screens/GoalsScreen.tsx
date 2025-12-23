@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../state/store';
 import { COLORS } from '../utils/constants';
@@ -18,6 +19,7 @@ import { wp, hp, rf, rs, rp, rm } from '../utils/responsive';
 import { Header } from '../components';
 
 const GoalsScreen: React.FC = () => {
+  const navigation = useNavigation();
   const {
     stepGoal,
     waterGoal,
@@ -74,6 +76,7 @@ const GoalsScreen: React.FC = () => {
         title="Goals"
         subtitle="Set your daily targets"
         rightIcon="flag"
+        onBackPress={() => navigation.navigate('History')}
       />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>

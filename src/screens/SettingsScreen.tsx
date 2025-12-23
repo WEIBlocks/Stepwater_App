@@ -263,6 +263,7 @@ const SettingsScreen: React.FC = () => {
         title="Settings"
         subtitle="Customize your experience"
         rightIcon="settings"
+        onBackPress={() => navigation.navigate('Reminders')}
       />
 
       <ScrollView 

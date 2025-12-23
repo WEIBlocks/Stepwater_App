@@ -9,6 +9,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { COLORS } from '../utils/constants';
 import { theme } from '../utils/theme';
+import { rs, rp, rm, rf } from '../utils/responsive';
 
 interface StatCardProps {
   label: string;
@@ -74,31 +75,31 @@ const StatCard: React.FC<StatCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.card,
-    borderRadius: theme.borderRadius.card,
-    padding: theme.spacing.md,
-    marginVertical: theme.spacing.sm,
+    borderRadius: rs(theme.borderRadius.card),
+    padding: rp(theme.spacing.md),
+    marginVertical: rm(theme.spacing.sm),
     flexDirection: 'row',
     alignItems: 'center',
-    borderLeftWidth: 4,
+    borderLeftWidth: rs(4),
     ...theme.shadows.card,
   },
   icon: {
-    fontSize: theme.typography.fontSize.valueMedium,
-    marginRight: theme.spacing.md,
+    fontSize: rf(theme.typography.fontSize.valueMedium),
+    marginRight: rm(theme.spacing.md),
   },
   content: {
     flex: 1,
   },
   label: {
-    fontSize: theme.typography.fontSize.captionSmall,
+    fontSize: rf(theme.typography.fontSize.captionSmall),
     color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.xs,
+    marginBottom: rm(theme.spacing.xs),
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     fontWeight: theme.typography.fontWeight.medium,
   },
   value: {
-    fontSize: theme.typography.fontSize.valueMedium,
+    fontSize: rf(theme.typography.fontSize.valueMedium),
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.textPrimary,
   },
