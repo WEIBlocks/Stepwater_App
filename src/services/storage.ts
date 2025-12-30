@@ -13,7 +13,7 @@ const STORAGE_KEYS = {
   ONBOARDING: '@stepwater:onboarding_completed',
   PROFILE: '@stepwater:user_profile',
   ACHIEVEMENTS: '@stepwater:achievements',
-  BACKUP: '@stepwater:backup_data',
+
 };
 
 export class StorageService {
@@ -22,7 +22,7 @@ export class StorageService {
     try {
       const summariesJson = await AsyncStorage.getItem(STORAGE_KEYS.DAY_SUMMARIES);
       if (!summariesJson) return null;
-      
+
       const summaries: Record<string, DaySummary> = JSON.parse(summariesJson);
       return summaries[date] || null;
     } catch (error) {
@@ -35,10 +35,10 @@ export class StorageService {
     try {
       // Save to local storage first (always works)
       const summariesJson = await AsyncStorage.getItem(STORAGE_KEYS.DAY_SUMMARIES);
-      const summaries: Record<string, DaySummary> = summariesJson 
-        ? JSON.parse(summariesJson) 
+      const summaries: Record<string, DaySummary> = summariesJson
+        ? JSON.parse(summariesJson)
         : {};
-      
+
       summaries[summary.date] = summary;
       await AsyncStorage.setItem(STORAGE_KEYS.DAY_SUMMARIES, JSON.stringify(summaries));
 
@@ -59,7 +59,7 @@ export class StorageService {
     try {
       const summariesJson = await AsyncStorage.getItem(STORAGE_KEYS.DAY_SUMMARIES);
       if (!summariesJson) return [];
-      
+
       const summaries: Record<string, DaySummary> = JSON.parse(summariesJson);
       return Object.values(summaries).sort((a, b) => b.date.localeCompare(a.date));
     } catch (error) {
@@ -73,7 +73,7 @@ export class StorageService {
     try {
       const logsJson = await AsyncStorage.getItem(STORAGE_KEYS.WATER_LOGS);
       if (!logsJson) return [];
-      
+
       const logs: WaterLogItem[] = JSON.parse(logsJson);
       if (date) {
         return logs.filter(log => log.date === date);
@@ -90,7 +90,7 @@ export class StorageService {
       // Save to local storage first
       const logsJson = await AsyncStorage.getItem(STORAGE_KEYS.WATER_LOGS);
       const logs: WaterLogItem[] = logsJson ? JSON.parse(logsJson) : [];
-      
+
       logs.push(log);
       await AsyncStorage.setItem(STORAGE_KEYS.WATER_LOGS, JSON.stringify(logs));
 
@@ -109,7 +109,7 @@ export class StorageService {
       // Delete from local storage
       const logsJson = await AsyncStorage.getItem(STORAGE_KEYS.WATER_LOGS);
       if (!logsJson) return;
-      
+
       const logs: WaterLogItem[] = JSON.parse(logsJson);
       const filtered = logs.filter(log => log.id !== id);
       await AsyncStorage.setItem(STORAGE_KEYS.WATER_LOGS, JSON.stringify(filtered));
@@ -236,7 +236,7 @@ export class StorageService {
   static async saveProfile(profile: UserProfile): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
-      
+
       // Sync to Supabase if configured
       // Note: Profile sync can be added later if needed
     } catch (error) {
@@ -293,7 +293,7 @@ export class StorageService {
   static async importData(jsonData: string): Promise<void> {
     try {
       const data = JSON.parse(jsonData);
-      
+
       if (data.daySummaries) {
         const summaries: Record<string, DaySummary> = {};
         data.daySummaries.forEach((summary: DaySummary) => {
@@ -301,19 +301,19 @@ export class StorageService {
         });
         await AsyncStorage.setItem(STORAGE_KEYS.DAY_SUMMARIES, JSON.stringify(summaries));
       }
-      
+
       if (data.waterLogs) {
         await AsyncStorage.setItem(STORAGE_KEYS.WATER_LOGS, JSON.stringify(data.waterLogs));
       }
-      
+
       if (data.goals) {
         await this.saveGoals(data.goals);
       }
-      
+
       if (data.reminders) {
         await this.saveReminders(data.reminders);
       }
-      
+
       if (data.settings) {
         await this.saveSettings(data.settings);
       }
@@ -323,107 +323,6 @@ export class StorageService {
     }
   }
 
-  // Backup/Restore functionality
-  static async createBackup(): Promise<void> {
-    try {
-      const backup = {
-        daySummaries: await this.getAllDaySummaries(),
-        waterLogs: await this.getWaterLogs(),
-        goals: await this.getGoals(),
-        reminders: await this.getReminders(),
-        settings: await this.getSettings(),
-        profile: await this.getProfile(),
-        achievements: await this.getAchievements(),
-        backupDate: new Date().toISOString(),
-      };
-      
-      await AsyncStorage.setItem(STORAGE_KEYS.BACKUP, JSON.stringify(backup));
-      console.log('✅ Backup created successfully');
-    } catch (error) {
-      console.error('Error creating backup:', error);
-      throw error;
-    }
-  }
 
-  static async getBackup(): Promise<any | null> {
-    try {
-      const backupJson = await AsyncStorage.getItem(STORAGE_KEYS.BACKUP);
-      if (!backupJson) return null;
-      return JSON.parse(backupJson);
-    } catch (error) {
-      console.error('Error getting backup:', error);
-      return null;
-    }
-  }
-
-  static async hasBackup(): Promise<boolean> {
-    try {
-      const backup = await this.getBackup();
-      return backup !== null;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  static async restoreFromBackup(): Promise<void> {
-    try {
-      const backup = await this.getBackup();
-      if (!backup) {
-        throw new Error('No backup found');
-      }
-
-      // Restore day summaries
-      if (backup.daySummaries && backup.daySummaries.length > 0) {
-        const summaries: Record<string, DaySummary> = {};
-        backup.daySummaries.forEach((summary: DaySummary) => {
-          summaries[summary.date] = summary;
-        });
-        await AsyncStorage.setItem(STORAGE_KEYS.DAY_SUMMARIES, JSON.stringify(summaries));
-      }
-
-      // Restore water logs
-      if (backup.waterLogs && backup.waterLogs.length > 0) {
-        await AsyncStorage.setItem(STORAGE_KEYS.WATER_LOGS, JSON.stringify(backup.waterLogs));
-      }
-
-      // Restore goals
-      if (backup.goals) {
-        await this.saveGoals(backup.goals);
-      }
-
-      // Restore reminders
-      if (backup.reminders) {
-        await this.saveReminders(backup.reminders);
-      }
-
-      // Restore settings
-      if (backup.settings) {
-        await this.saveSettings(backup.settings);
-      }
-
-      // Restore profile
-      if (backup.profile) {
-        await this.saveProfile(backup.profile);
-      }
-
-      // Restore achievements
-      if (backup.achievements) {
-        await this.saveAchievements(backup.achievements);
-      }
-
-      console.log('✅ Data restored from backup successfully');
-    } catch (error) {
-      console.error('Error restoring from backup:', error);
-      throw error;
-    }
-  }
-
-  static async clearBackup(): Promise<void> {
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEYS.BACKUP);
-    } catch (error) {
-      console.error('Error clearing backup:', error);
-    }
-  }
 }
 

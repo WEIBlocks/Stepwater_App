@@ -140,5 +140,19 @@ class StepWaterServiceModule(reactContext: ReactApplicationContext) : ReactConte
             promise.reject("SERVICE_ERROR", "Failed to reset data: ${e.message}", e)
         }
     }
+
+    @ReactMethod
+    fun reinitializeSensor(promise: Promise) {
+        try {
+            val context = reactApplicationContext
+            val intent = Intent(context, StepWaterForegroundService::class.java).apply {
+                action = StepWaterForegroundService.ACTION_REINITIALIZE_SENSOR
+            }
+            context.startForegroundService(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("SERVICE_ERROR", "Failed to reinitialize sensor: ${e.message}", e)
+        }
+    }
 }
 

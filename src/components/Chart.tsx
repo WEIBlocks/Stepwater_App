@@ -1,105 +1,106 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import Svg, { Rect, Text as SvgText, G } from 'react-native-svg';
-import { DaySummary } from '../types';
-import { formatSteps, formatWater } from '../utils/formatting';
-import { COLORS } from '../utils/constants';
 import { theme } from '../utils/theme';
-import { format, parseISO, subDays, isSameDay } from 'date-fns';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 32;
-const CHART_HEIGHT = 200;
-const BAR_WIDTH = (CHART_WIDTH - 32) / 7;
-const GAP = 4;
+
+export interface ChartDataPoint {
+  label: string;
+  value: number;
+  labelSecondary?: string; // e.g., the date
+  isHighlight?: boolean;
+}
 
 interface ChartProps {
-  summaries: DaySummary[];
-  type?: 'steps' | 'water';
-  days?: number;
-  unit?: 'metric' | 'imperial';
+  data: ChartDataPoint[];
+  height?: number;
+  width?: number;
+  barColor?: string;
+  activeBarColor?: string;
+  formatValue?: (value: number) => string;
+  selectedIndex?: number;
+  onSelect?: (index: number) => void;
+  maxScaleValue?: number;
 }
 
 const Chart: React.FC<ChartProps> = ({
-  summaries,
-  type = 'steps',
-  days = 7,
-  unit = 'metric',
+  data,
+  height = 200,
+  barColor = theme.colors.primary,
+  activeBarColor,
+  formatValue = (v) => v.toString(),
+  selectedIndex,
+  onSelect,
+  width,
+  maxScaleValue,
 }) => {
-  // Get last N days
-  const today = new Date();
-  const dateRange = Array.from({ length: days }, (_, i) => subDays(today, i)).reverse();
+  const chartWidth = width || CHART_WIDTH;
+  const GAP = 4;
+  const BAR_WIDTH = (chartWidth - 32) / Math.max(data.length, 1);
 
-  // Map summaries to dates
-  const summaryMap = new Map(summaries.map(s => [s.date, s]));
-  
-  // Get values for each day
-  const data = dateRange.map(date => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const summary = summaryMap.get(dateStr);
-    const value = type === 'steps' 
-      ? summary?.steps || 0
-      : summary?.waterMl || 0;
-    return { date, value, isToday: isSameDay(date, today) };
-  });
-
-  const maxValue = Math.max(...data.map(d => d.value), 1);
-  const goal = type === 'steps' ? 10000 : 2000;
+  // Use the larger of: provided max scale value (goal), OR the highest value in the data
+  // This ensures that if we exceed the goal, the chart scales down to fit the high value.
+  // But if values are low, the chart is scaled to the goal (so bars look small).
+  const dataMax = Math.max(...data.map(d => d.value), 0);
+  const maxValue = Math.max(dataMax, maxScaleValue || 1, 1);
 
   const getBarHeight = (value: number) => {
-    return (value / maxValue) * (CHART_HEIGHT - 40);
-  };
-
-  const getBarColor = (value: number, isToday: boolean) => {
-    if (value >= goal) return theme.colors.steps; // Success green
-    if (isToday) return type === 'steps' ? theme.colors.steps : theme.colors.water;
-    return type === 'steps' ? theme.colors.steps : theme.colors.water;
+    return (value / maxValue) * (height - 40);
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>
-        Last {days} Days - {type === 'steps' ? 'Steps' : 'Water'}
-      </Text>
       <View style={styles.chartContainer}>
-        <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
+        <Svg width={chartWidth} height={height}>
           {data.map((item, index) => {
             const barHeight = getBarHeight(item.value);
-            const x = 16 + index * (BAR_WIDTH + GAP);
-            const y = CHART_HEIGHT - 20 - barHeight;
+            // Better x calculation to center bars if count is low, or just spread them:
+            // For now, simple spread:
+            const effectiveBarWidth = (chartWidth - (GAP * (data.length - 1))) / data.length;
+            const barX = index * (effectiveBarWidth + GAP);
+
+            const y = height - 20 - barHeight;
+            const isActive = selectedIndex === index;
+            const finalBarColor = isActive && activeBarColor ? activeBarColor : (item.isHighlight ? activeBarColor || barColor : barColor);
 
             return (
-              <G key={index}>
+              <G key={index} onPress={() => onSelect?.(index)}>
                 <Rect
-                  x={x}
+                  x={barX}
                   y={y}
-                  width={BAR_WIDTH}
+                  width={effectiveBarWidth}
                   height={barHeight}
-                  fill={getBarColor(item.value, item.isToday)}
+                  fill={finalBarColor}
                   rx={4}
+                  opacity={isActive || selectedIndex === undefined ? 1 : 0.6}
                 />
+
+                {/* Value Label (only if active or specifically highlighted?) -> Let's show if active or value > 0 and enough space? 
+                    The original showed if value > 0. Let's keep it simple. */}
                 {item.value > 0 && (
                   <SvgText
-                    x={x + BAR_WIDTH / 2}
+                    x={barX + effectiveBarWidth / 2}
                     y={y - 5}
                     fontSize="10"
                     fill={theme.colors.textSecondary}
                     textAnchor="middle"
                   >
-                    {type === 'steps' 
-                      ? formatSteps(item.value)
-                      : formatWater(item.value, unit)
-                    }
+                    {formatValue(item.value)}
                   </SvgText>
                 )}
+
+                {/* X Axis Label */}
                 <SvgText
-                  x={x + BAR_WIDTH / 2}
-                  y={CHART_HEIGHT - 5}
+                  x={barX + effectiveBarWidth / 2}
+                  y={height - 5}
                   fontSize="10"
-                  fill={theme.colors.textSecondary}
+                  fill={isActive ? theme.colors.textPrimary : theme.colors.textSecondary}
                   textAnchor="middle"
+                  fontWeight={isActive ? "bold" : "normal"}
                 >
-                  {format(item.date, 'EEE')}
+                  {item.label}
                 </SvgText>
               </G>
             );

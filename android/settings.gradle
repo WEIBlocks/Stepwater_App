@@ -63,7 +63,6 @@ if (getRNMinorVersion() < 75) {
 }
 
 include ':app'
-project(':app').projectDir = new File(rootProject.projectDir, './app')
-include ':StepWaterService'
-project(':StepWaterService').projectDir = new File(rootProject.projectDir, '../modules/StepWaterService/android')
+include ':stepwater-service'
+project(':stepwater-service').projectDir = new File(rootProject.projectDir, '../modules/StepWaterService/android')
 includeBuild(new File(["node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile())

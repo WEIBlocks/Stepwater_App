@@ -20,14 +20,14 @@ import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 're
 import { GoalRing, StatCard, FAB, AchievementModal, WeeklyProgress } from '../components';
 import { useStore } from '../state/store';
 import { useHydration } from '../hooks/useHydration';
-import { formatSteps, formatWater, formatDistance, formatCalories } from '../utils/formatting';
+import { formatSteps, formatWater, formatDistance, formatCalories, getTodayDateString } from '../utils/formatting';
 import { COLORS, WATER_PRESETS_ML } from '../utils/constants';
 import { theme } from '../utils/theme';
 import { calculateStatistics, TrackingStatistics } from '../utils/statistics';
 import { StorageService } from '../services/storage';
 import { DaySummary } from '../types';
 import AddWaterModal from './AddWaterModal';
-import { wp, hp, rf, rs, rp, rm, SCREEN_WIDTH, SCREEN_HEIGHT } from '../utils/responsive';
+import { wp, hp, rf, rs, rp, rm, SCREEN_WIDTH, SCREEN_HEIGHT, getResponsiveDimensions } from '../utils/responsive';
 
 // Animated Circle for Progress Ring
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -64,9 +64,9 @@ const ProgressRing: React.FC<{
   const offset = -responsiveSize / 2;
 
   return (
-    <Svg 
-      width={responsiveSize} 
-      height={responsiveSize} 
+    <Svg
+      width={responsiveSize}
+      height={responsiveSize}
       style={[styles.progressRingSvg, {
         marginLeft: offset,
         marginTop: offset,
@@ -124,6 +124,9 @@ const HomeScreen: React.FC = () => {
   const pauseStepTracking = useStore((state) => state.pauseStepTracking);
   const resumeStepTracking = useStore((state) => state.resumeStepTracking);
 
+  // Get responsive dimensions for small screen adjustments
+  const { isSmallDevice } = getResponsiveDimensions();
+
   const { addWater } = useHydration();
   // Note: usePedometer is initialized in App.tsx, no need to call it here
 
@@ -139,6 +142,9 @@ const HomeScreen: React.FC = () => {
     loadDashboardData();
   }, []);
 
+  // Note: Permissions are now requested in App.tsx immediately on app launch
+  // This ensures foreground service works for new users during onboarding
+
   // Debug: Log when currentSteps changes to verify re-renders
   useEffect(() => {
     console.log('🖥️ HomeScreen re-render - currentSteps:', currentSteps);
@@ -148,10 +154,10 @@ const HomeScreen: React.FC = () => {
     // Always calculate statistics, even with empty data (will return zeros)
     // This ensures cards are always visible, even for new users
     // Merge today's live data into summaries for accurate statistics
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     const summariesWithLiveData = [...allSummaries];
     const todayIndex = summariesWithLiveData.findIndex(s => s.date === today);
-    
+
     if (todayIndex >= 0) {
       // Update today's summary with live data
       summariesWithLiveData[todayIndex] = {
@@ -169,7 +175,7 @@ const HomeScreen: React.FC = () => {
         calories: Math.round(currentSteps * 0.04),
       });
     }
-    
+
     const stats = calculateStatistics(summariesWithLiveData, stepGoal, waterGoal);
     setStatistics(stats);
   }, [allSummaries, stepGoal, waterGoal, currentSteps, waterConsumed]);
@@ -249,18 +255,18 @@ const HomeScreen: React.FC = () => {
         Alert.alert('Invalid Amount', 'Please enter a valid water amount.');
         return;
       }
-      
+
       // addWater already updates the store state immediately
       // No need to reload, UI will update automatically via Zustand
       await addWater(amount);
-      
+
       // If goal was achieved, the useEffect will handle closing AddWaterModal
       // and showing AchievementModal. Don't close modal manually here.
       // The modal will be closed by the achievement effect if needed.
     } catch (error: any) {
       console.error('Error adding water:', error);
       Alert.alert(
-        'Error', 
+        'Error',
         error?.message || 'Failed to add water. Please try again.'
       );
     }
@@ -289,10 +295,10 @@ const HomeScreen: React.FC = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Today</Text>
           <Text style={styles.subtitle}>
-            {new Date().toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              month: 'long', 
-              day: 'numeric' 
+            {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric'
             })}
           </Text>
         </View>
@@ -334,7 +340,7 @@ const HomeScreen: React.FC = () => {
                   color={theme.colors.steps}
                 />
                 <View style={styles.heroCounterContainer}>
-                  <Text 
+                  <Text
                     style={styles.heroCounter}
                     numberOfLines={1}
                     adjustsFontSizeToFit={true}
@@ -343,7 +349,12 @@ const HomeScreen: React.FC = () => {
                     {formatSteps(currentSteps)}
                   </Text>
                   <Text style={styles.heroCounterLabel}>Steps</Text>
-                  <Text style={styles.heroCounterGoal}>
+                  <Text
+                    style={styles.heroCounterGoal}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
+                  >
                     {Math.round(stepProgress * 100)}% of {formatSteps(stepGoal)}
                   </Text>
                 </View>
@@ -353,7 +364,12 @@ const HomeScreen: React.FC = () => {
               <View style={styles.heroInfoRow}>
                 <View style={styles.heroInfoItem}>
                   <Ionicons name="stats-chart" size={rs(18)} color={theme.colors.steps} />
-                  <Text style={styles.heroInfoText}>
+                  <Text
+                    style={styles.heroInfoText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
                     {formatSteps(Math.round(stepAverage))} avg
                   </Text>
                 </View>
@@ -380,7 +396,7 @@ const HomeScreen: React.FC = () => {
                   color={theme.colors.water}
                 />
                 <View style={styles.heroCounterContainer}>
-                  <Text 
+                  <Text
                     style={styles.heroCounter}
                     numberOfLines={1}
                     adjustsFontSizeToFit={true}
@@ -389,7 +405,12 @@ const HomeScreen: React.FC = () => {
                     {formatWater(waterConsumed, settings.unit)}
                   </Text>
                   <Text style={styles.heroCounterLabel}>Water</Text>
-                  <Text style={styles.heroCounterGoal}>
+                  <Text
+                    style={styles.heroCounterGoal}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
+                  >
                     {Math.round(waterProgress * 100)}% of {formatWater(waterGoal, settings.unit)}
                   </Text>
                 </View>
@@ -399,17 +420,29 @@ const HomeScreen: React.FC = () => {
               <View style={styles.heroInfoRow}>
                 <View style={styles.heroInfoItem}>
                   <Ionicons name="stats-chart" size={rs(18)} color={theme.colors.water} />
-                  <Text style={styles.heroInfoText}>
+                  <Text
+                    style={styles.heroInfoText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
                     {formatWater(Math.round(waterAverage), settings.unit)} avg
                   </Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.heroEditButton, { backgroundColor: theme.colors.water + '15', borderColor: theme.colors.water + '30' }]}
                   onPress={() => setShowAddWater(true)}
                   activeOpacity={0.7}
                 >
                   <Ionicons name="add-circle" size={rs(20)} color={theme.colors.water} />
-                  <Text style={[styles.heroEditText, { color: theme.colors.water }]}>Add</Text>
+                  <Text
+                    style={[styles.heroEditText, { color: theme.colors.water }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    Add
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -422,28 +455,64 @@ const HomeScreen: React.FC = () => {
             <View style={styles.quickStatIconContainer}>
               <Ionicons name="location" size={rs(28)} color={theme.colors.steps} />
             </View>
-            <Text style={styles.quickStatValue}>
+            <Text
+              style={styles.quickStatValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.7}
+            >
               {formatDistance(estimatedDistance, settings.unit)}
             </Text>
-            <Text style={styles.quickStatLabel}>Distance</Text>
+            <Text
+              style={styles.quickStatLabel}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.8}
+            >
+              Distance
+            </Text>
           </View>
           <View style={styles.quickStatCard}>
             <View style={styles.quickStatIconContainer}>
               <Ionicons name="flame" size={rs(28)} color={theme.colors.steps} />
             </View>
-            <Text style={styles.quickStatValue}>
+            <Text
+              style={styles.quickStatValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.7}
+            >
               {formatCalories(estimatedCalories)}
             </Text>
-            <Text style={styles.quickStatLabel}>Calories</Text>
+            <Text
+              style={styles.quickStatLabel}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.8}
+            >
+              Calories
+            </Text>
           </View>
           <View style={styles.quickStatCard}>
             <View style={styles.quickStatIconContainer}>
               <Ionicons name="time-outline" size={rs(28)} color={theme.colors.water} />
             </View>
-            <Text style={styles.quickStatValue}>
+            <Text
+              style={styles.quickStatValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.7}
+            >
               {Math.round(currentSteps * 0.0005)}h {Math.round((currentSteps * 0.0005 % 1) * 60)}m
             </Text>
-            <Text style={styles.quickStatLabel}>Time</Text>
+            <Text
+              style={styles.quickStatLabel}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.8}
+            >
+              Time
+            </Text>
           </View>
         </View>
 
@@ -459,13 +528,20 @@ const HomeScreen: React.FC = () => {
           />
         </View>
 
-        
+
 
         {/* Tracking Statistics Section */}
         {statistics && (
           <View style={styles.trackingSection}>
-            <Text style={styles.sectionTitle}>TRACKING OVERVIEW</Text>
-            
+            <Text
+              style={styles.sectionTitle}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.8}
+            >
+              TRACKING OVERVIEW
+            </Text>
+
             {/* Streaks */}
             <View style={styles.streakContainer}>
               <TouchableOpacity
@@ -476,11 +552,32 @@ const HomeScreen: React.FC = () => {
                   <Ionicons name="flame" size={rs(28)} color={theme.colors.steps} />
                 </View>
                 <View style={styles.streakContent}>
-                  <Text style={styles.streakLabel}>STEP STREAK</Text>
-                  <Text style={styles.streakValue}>{statistics.currentStepStreak} days</Text>
+                  <Text
+                    style={styles.streakLabel}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
+                  >
+                    STEP STREAK
+                  </Text>
+                  <Text
+                    style={styles.streakValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    {statistics.currentStepStreak} days
+                  </Text>
                 </View>
                 {statistics.currentStepStreak > 0 && (
-                  <Text style={styles.streakBadge}>Active</Text>
+                  <Text
+                    style={styles.streakBadge}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    Active
+                  </Text>
                 )}
               </TouchableOpacity>
 
@@ -492,11 +589,32 @@ const HomeScreen: React.FC = () => {
                   <Ionicons name="water" size={rs(28)} color={theme.colors.water} />
                 </View>
                 <View style={styles.streakContent}>
-                  <Text style={styles.streakLabel}>WATER STREAK</Text>
-                  <Text style={styles.streakValue}>{statistics.currentWaterStreak} days</Text>
+                  <Text
+                    style={styles.streakLabel}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
+                  >
+                    WATER STREAK
+                  </Text>
+                  <Text
+                    style={styles.streakValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    {statistics.currentWaterStreak} days
+                  </Text>
                 </View>
                 {statistics.currentWaterStreak > 0 && (
-                  <Text style={styles.streakBadge}>Active</Text>
+                  <Text
+                    style={styles.streakBadge}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    Active
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -504,15 +622,41 @@ const HomeScreen: React.FC = () => {
             {/* Weekly Progress */}
             <View style={styles.progressCard}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressTitle}>Weekly Average</Text>
-                <Text style={styles.progressSubtitle}>Last 7 days</Text>
+                <Text
+                  style={styles.progressTitle}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.8}
+                >
+                  Weekly Average
+                </Text>
+                <Text
+                  style={styles.progressSubtitle}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.8}
+                >
+                  Last 7 days
+                </Text>
               </View>
-              
+
               <View style={styles.progressBarContainer}>
                 <View style={styles.progressBarRow}>
                   <View style={styles.progressBarLabelContainer}>
-                    <Text style={styles.progressBarLabel}>Steps</Text>
-                    <Text style={styles.progressBarValue}>
+                    <Text
+                      style={styles.progressBarLabel}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.8}
+                    >
+                      Steps
+                    </Text>
+                    <Text
+                      style={styles.progressBarValue}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.7}
+                    >
                       {formatSteps(Math.round(statistics.weeklyAverageSteps))}
                     </Text>
                   </View>
@@ -531,8 +675,20 @@ const HomeScreen: React.FC = () => {
 
                 <View style={styles.progressBarRow}>
                   <View style={styles.progressBarLabelContainer}>
-                    <Text style={styles.progressBarLabel}>Water</Text>
-                    <Text style={styles.progressBarValue}>
+                    <Text
+                      style={styles.progressBarLabel}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.8}
+                    >
+                      Water
+                    </Text>
+                    <Text
+                      style={styles.progressBarValue}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.7}
+                    >
                       {formatWater(Math.round(statistics.weeklyAverageWater), settings.unit)}
                     </Text>
                   </View>
@@ -559,8 +715,20 @@ const HomeScreen: React.FC = () => {
               >
                 <Text style={styles.lifetimeIcon}>👣</Text>
                 <View style={styles.lifetimeContent}>
-                  <Text style={styles.lifetimeLabel}>Total Steps</Text>
-                  <Text style={styles.lifetimeValue}>
+                  <Text
+                    style={styles.lifetimeLabel}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    Total Steps
+                  </Text>
+                  <Text
+                    style={styles.lifetimeValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
+                  >
                     {formatSteps(statistics.lifetimeSteps)}
                   </Text>
                 </View>
@@ -572,8 +740,20 @@ const HomeScreen: React.FC = () => {
               >
                 <Ionicons name="wine" size={rf(28)} color={theme.colors.water} style={styles.lifetimeIcon} />
                 <View style={styles.lifetimeContent}>
-                  <Text style={styles.lifetimeLabel}>Total Water</Text>
-                  <Text style={styles.lifetimeValue}>
+                  <Text
+                    style={styles.lifetimeLabel}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    Total Water
+                  </Text>
+                  <Text
+                    style={styles.lifetimeValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
+                  >
                     {formatWater(statistics.lifetimeWater, settings.unit)}
                   </Text>
                 </View>
@@ -585,8 +765,20 @@ const HomeScreen: React.FC = () => {
               >
                 <Text style={styles.lifetimeIcon}>📅</Text>
                 <View style={styles.lifetimeContent}>
-                  <Text style={styles.lifetimeLabel}>Days Tracked</Text>
-                  <Text style={styles.lifetimeValue}>
+                  <Text
+                    style={styles.lifetimeLabel}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    Days Tracked
+                  </Text>
+                  <Text
+                    style={styles.lifetimeValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
+                  >
                     {statistics.totalDaysTracked}
                   </Text>
                 </View>
@@ -596,20 +788,65 @@ const HomeScreen: React.FC = () => {
         )}
 
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>TODAY'S SUMMARY</Text>
+          <Text
+            style={styles.summaryTitle}
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.8}
+          >
+            TODAY'S SUMMARY
+          </Text>
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Steps</Text>
-              <Text style={styles.summaryValue}>{formatSteps(currentSteps)}</Text>
-              <Text style={styles.summaryGoal}>Goal: {formatSteps(stepGoal)}</Text>
+              <Text
+                style={styles.summaryLabel}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.8}
+              >
+                Steps
+              </Text>
+              <Text
+                style={styles.summaryValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.6}
+              >
+                {formatSteps(currentSteps)}
+              </Text>
+              <Text
+                style={styles.summaryGoal}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.7}
+              >
+                Goal: {formatSteps(stepGoal)}
+              </Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Water</Text>
-              <Text style={styles.summaryValue}>
+              <Text
+                style={styles.summaryLabel}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.8}
+              >
+                Water
+              </Text>
+              <Text
+                style={styles.summaryValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.6}
+              >
                 {formatWater(waterConsumed, settings.unit)}
               </Text>
-              <Text style={styles.summaryGoal}>
+              <Text
+                style={styles.summaryGoal}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.7}
+              >
                 Goal: {formatWater(waterGoal, settings.unit)}
               </Text>
             </View>
@@ -787,27 +1024,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: rs(6),
+    flexShrink: 1,
+    minWidth: 0,
   },
   heroInfoText: {
     fontSize: theme.typography.fontSize.bodySmall,
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.textSecondary,
+    flexShrink: 1,
   },
   heroEditButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: rs(6),
-    paddingHorizontal: rp(12),
+    paddingHorizontal: SCREEN_WIDTH < 360 ? rp(8) : rp(12),
     paddingVertical: rp(8),
     borderRadius: theme.borderRadius.button,
     backgroundColor: theme.colors.primary + '15',
     borderWidth: 1,
     borderColor: theme.colors.primary + '30',
+    flexShrink: 1,
   },
   heroEditText: {
     fontSize: theme.typography.fontSize.bodySmall,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.primary,
+    flexShrink: 1,
   },
   mainProgressCard: {
     backgroundColor: COLORS.light.surface,
@@ -926,6 +1168,7 @@ const styles = StyleSheet.create({
   },
   quickStatCard: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: theme.colors.card,
     borderRadius: theme.borderRadius.card,
     padding: rp(20),
@@ -955,13 +1198,18 @@ const styles = StyleSheet.create({
     marginBottom: rm(6),
     textAlign: 'center',
     letterSpacing: -0.2,
+    width: '100%',
+    flexShrink: 1,
   },
   quickStatLabel: {
     fontSize: theme.typography.fontSize.captionSmall,
     color: theme.colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: SCREEN_WIDTH < 360 ? 0.3 : 0.8,
     fontWeight: theme.typography.fontWeight.semibold,
+    width: '100%',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   weeklySection: {
     marginTop: rm(8),
@@ -982,7 +1230,9 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     marginBottom: rm(18),
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: SCREEN_WIDTH < 360 ? 0.3 : 0.8,
+    width: '100%',
+    textAlign: 'center',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -991,21 +1241,26 @@ const styles = StyleSheet.create({
   },
   summaryItem: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
+    paddingHorizontal: rp(4),
   },
   summaryDivider: {
     width: 1,
     height: rs(50),
     backgroundColor: theme.colors.border + '60',
-    marginHorizontal: rm(20),
+    marginHorizontal: SCREEN_WIDTH < 360 ? rm(8) : rm(20),
   },
   summaryLabel: {
     fontSize: theme.typography.fontSize.captionSmall,
     color: theme.colors.textSecondary,
     marginBottom: rm(10),
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: SCREEN_WIDTH < 360 ? 0.3 : 0.8,
     fontWeight: theme.typography.fontWeight.semibold,
+    width: '100%',
+    textAlign: 'center',
+    flexShrink: 1,
   },
   summaryValue: {
     fontSize: theme.typography.fontSize.valueMedium,
@@ -1013,11 +1268,17 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     marginBottom: rm(6),
     letterSpacing: -0.5,
+    width: '100%',
+    textAlign: 'center',
+    flexShrink: 1,
   },
   summaryGoal: {
     fontSize: theme.typography.fontSize.caption,
     color: theme.colors.textSecondary,
     fontWeight: theme.typography.fontWeight.medium,
+    width: '100%',
+    textAlign: 'center',
+    flexShrink: 1,
   },
   trackingSection: {
     marginTop: rm(28),
@@ -1028,7 +1289,7 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     marginBottom: rm(18),
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: SCREEN_WIDTH < 360 ? 0.3 : 0.8,
   },
   streakContainer: {
     flexDirection: 'row',
@@ -1041,7 +1302,7 @@ const styles = StyleSheet.create({
     minHeight: rp(90),
     borderRadius: theme.borderRadius.card,
     paddingVertical: rp(2),
-    paddingHorizontal: rp(3),
+    paddingHorizontal: SCREEN_WIDTH < 360 ? rp(2) : rp(3),
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: rp(2),
@@ -1088,6 +1349,7 @@ const styles = StyleSheet.create({
     gap: rm(2),
     alignItems: 'flex-start',
     justifyContent: 'center',
+    flexShrink: 1,
   },
   streakLabel: {
     fontSize: rf(10),
@@ -1095,7 +1357,7 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     marginBottom: rm(2),
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    letterSpacing: SCREEN_WIDTH < 360 ? 0.1 : 0.3,
     fontWeight: theme.typography.fontWeight.medium,
     textAlign: 'left',
     width: '100%',
@@ -1109,18 +1371,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     textAlign: 'left',
     width: '100%',
+    flexShrink: 1,
   },
   streakBadge: {
     fontSize: rf(10),
     color: theme.colors.steps,
     fontWeight: theme.typography.fontWeight.semibold,
     backgroundColor: theme.colors.steps + '18',
-    paddingHorizontal: rp(8),
+    paddingHorizontal: SCREEN_WIDTH < 360 ? rp(4) : rp(8),
     paddingVertical: rp(3),
     borderRadius: rs(8),
     overflow: 'hidden',
     letterSpacing: 0.2,
-    minWidth: rs(42),
+    minWidth: SCREEN_WIDTH < 360 ? rs(35) : rs(42),
     textAlign: 'center',
     flexShrink: 1,
   },
@@ -1159,17 +1422,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: rm(6),
+    gap: rs(8),
   },
   progressBarLabel: {
     fontSize: theme.typography.fontSize.body,
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.textPrimary,
     letterSpacing: -0.2,
+    flexShrink: 1,
+    minWidth: 0,
   },
   progressBarValue: {
     fontSize: theme.typography.fontSize.body,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.textSecondary,
+    flexShrink: 1,
+    minWidth: 0,
+    textAlign: 'right',
   },
   progressBar: {
     height: rs(10),
@@ -1188,10 +1457,10 @@ const styles = StyleSheet.create({
   },
   lifetimeCard: {
     flex: 1,
-    minWidth: '30%',
+    minWidth: SCREEN_WIDTH < 360 ? '31%' : '30%',
     backgroundColor: theme.colors.card,
     borderRadius: theme.borderRadius.card,
-    padding: rp(16),
+    padding: SCREEN_WIDTH < 360 ? rp(12) : rp(16),
     alignItems: 'center',
     borderWidth: 1,
     borderColor: theme.colors.border + '40',
@@ -1214,8 +1483,10 @@ const styles = StyleSheet.create({
     marginBottom: rm(6),
     textTransform: 'uppercase',
     textAlign: 'center',
-    letterSpacing: 0.6,
+    letterSpacing: SCREEN_WIDTH < 360 ? 0.2 : 0.6,
     fontWeight: theme.typography.fontWeight.semibold,
+    width: '100%',
+    flexShrink: 1,
   },
   lifetimeValue: {
     fontSize: theme.typography.fontSize.body,
@@ -1223,6 +1494,8 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     textAlign: 'center',
     letterSpacing: -0.2,
+    width: '100%',
+    flexShrink: 1,
   },
 });
 

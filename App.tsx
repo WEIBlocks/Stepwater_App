@@ -8,6 +8,7 @@ import ErrorBoundary from './src/utils/errorBoundary';
 import { useStore } from './src/state/store';
 import { useHydration } from './src/hooks/useHydration';
 import { nativeStepWaterService } from './src/services/nativeStepWaterService';
+import { requestAllPermissionsInBackground, checkPermissionsAndStartService } from './src/services/permissions';
 // Import notification handler early to ensure it's registered before any notifications
 import './src/services/notifications';
 
@@ -17,40 +18,43 @@ const AppContent = () => {
   const loadGoals = useStore((state) => state.loadGoals);
   const setStepGoal = useStore((state) => state.setStepGoal);
   const setWaterGoal = useStore((state) => state.setWaterGoal);
-  
-  // Initialize native foreground service on Android
+
+  // Initialize native foreground service on Android IMMEDIATELY on app launch
+  // Service starts without waiting for permissions - step tracking will begin once permissions are granted
   useEffect(() => {
     if (Platform.OS === 'android') {
       let syncInterval: NodeJS.Timeout | null = null;
-      
+
       const initializeNativeService = async () => {
         try {
-          // Start the native foreground service (non-blocking - app works without it)
+          // Start the native foreground service IMMEDIATELY without permission checks
+          // The service can start and run without permissions - step tracking will work once permissions are granted
+          console.log('🚀 Starting native foreground service immediately on app launch...');
           const serviceStarted = await nativeStepWaterService.startService();
           if (serviceStarted) {
-            console.log('✅ Native foreground service started');
+            console.log('✅ Native foreground service started immediately (permissions independent)');
           } else {
             console.warn('⚠️ Native service not started (may not be available)');
           }
-          
-          // Load goals and sync them to native service
+
+          // Load goals and sync them to native service (non-blocking)
           try {
             await loadGoals();
             const goals = useStore.getState();
-            
+
             // Sync goals to native service (non-blocking)
-            await nativeStepWaterService.setStepGoal(goals.stepGoal).catch(() => {});
-            await nativeStepWaterService.setWaterGoal(goals.waterGoal).catch(() => {});
-            
+            await nativeStepWaterService.setStepGoal(goals.stepGoal).catch(() => { });
+            await nativeStepWaterService.setWaterGoal(goals.waterGoal).catch(() => { });
+
             // Sync water unit
             const waterUnit = goals.settings.unit === 'imperial' ? 'oz' : 'ml';
-            await nativeStepWaterService.setWaterUnit(waterUnit).catch(() => {});
-            
+            await nativeStepWaterService.setWaterUnit(waterUnit).catch(() => { });
+
             // Sync current values from native service (source of truth)
             await syncFromNativeService().catch((error) => {
               console.warn('Initial sync error:', error);
             });
-            
+
             // Set up periodic sync from native service (every 5 seconds)
             syncInterval = setInterval(() => {
               syncFromNativeService().catch((error) => {
@@ -66,9 +70,10 @@ const AppContent = () => {
           // App continues to work even if native service fails
         }
       };
-      
+
+      // Start service immediately - no delays, no permission checks
       initializeNativeService();
-      
+
       // Cleanup interval on unmount
       return () => {
         if (syncInterval) {
@@ -77,7 +82,31 @@ const AppContent = () => {
       };
     }
   }, [syncFromNativeService, loadGoals]);
-  
+
+  // Request permissions immediately for both new and returning users
+  // This ensures foreground service can start tracking as soon as possible,
+  // even before the user completes onboarding/profile setup
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      // Small delay to let the app initialize, then request permissions
+      const permissionTimer = setTimeout(() => {
+        // First check if permissions already granted (returning users)
+        // Then request any missing permissions (prompts dialogs if needed)
+        checkPermissionsAndStartService()
+          .then(() => {
+            requestAllPermissionsInBackground();
+          })
+          .catch((error) => {
+            console.warn('Permission check error:', error);
+            // Still try to request permissions even if check fails
+            requestAllPermissionsInBackground();
+          });
+      }, 1000);
+
+      return () => clearTimeout(permissionTimer);
+    }
+  }, []);
+
   // Initialize hydration tracking (non-blocking)
   // Step tracking is now handled by native service
   // This hook must be called in component body, not in try-catch

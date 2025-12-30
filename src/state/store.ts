@@ -136,18 +136,59 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     try {
+      // Check if service is running first
+      let isRunning = await nativeStepWaterService.isServiceRunning();
+      
+      if (!isRunning) {
+        // Attempt to start service
+        const started = await nativeStepWaterService.startService();
+        if (!started) {
+          // Service start failed, might not be available - skip sync silently
+          return;
+        }
+        
+        // Poll for service to become available (up to 3 seconds with exponential backoff)
+        let retries = 0;
+        const maxRetries = 6;
+        while (retries < maxRetries && !isRunning) {
+          await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, retries)));
+          isRunning = await nativeStepWaterService.isServiceRunning();
+          retries++;
+        }
+        
+        if (!isRunning) {
+          // Service still not running after retries - log once but don't spam warnings
+          if (retries >= maxRetries) {
+            console.warn('⚠️ Native service not running after startup attempt - will retry on next sync');
+          }
+          return;
+        }
+      }
+
       // Read current values from native service (source of truth)
-      const [nativeSteps, nativeWater] = await Promise.all([
-        nativeStepWaterService.getCurrentSteps(),
-        nativeStepWaterService.getCurrentWater(),
-      ]);
+      const nativeSteps = await nativeStepWaterService.getCurrentSteps();
+      const nativeWater = await nativeStepWaterService.getCurrentWater();
 
       const prevSteps = get().currentSteps;
       const prevWater = get().waterConsumed;
 
-      // Update steps if changed
+      // Debug logging
       if (nativeSteps !== prevSteps) {
+        console.log('🔄 Native service sync:', {
+          nativeSteps,
+          prevSteps,
+          difference: nativeSteps - prevSteps,
+          isRunning,
+        });
+      }
+
+      // Update steps - always update if native value is different and >= 0
+      if (nativeSteps !== prevSteps && nativeSteps >= 0) {
+        // Always use native value - it's the source of truth
         get().setCurrentSteps(nativeSteps);
+        if (nativeSteps > prevSteps) {
+          console.log('✅ Steps increased:', prevSteps, '→', nativeSteps);
+        }
       }
 
       // Update water if changed
@@ -155,7 +196,8 @@ export const useStore = create<AppState>((set, get) => ({
         set({ waterConsumed: nativeWater });
       }
     } catch (error) {
-      console.error('Error syncing from native service:', error);
+      console.error('❌ Error syncing from native service:', error);
+      // If native service fails, log it but don't break the app
     }
   },
 

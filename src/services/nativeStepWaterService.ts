@@ -19,20 +19,30 @@ interface StepWaterServiceInterface {
   setWaterGoal(goal: number): Promise<boolean>;
   setWaterUnit(unit: string): Promise<boolean>;
   resetAllData(): Promise<boolean>;
+  reinitializeSensor(): Promise<boolean>;
 }
 
 class NativeStepWaterService {
   private service: StepWaterServiceInterface | null = null;
 
   constructor() {
-    if (Platform.OS === 'android' && StepWaterService) {
-      this.service = StepWaterService as StepWaterServiceInterface;
+    if (Platform.OS === 'android') {
+      // Debug log to verify native module registration
+      console.log(
+        '🔍 Native StepWaterService module available:',
+        !!StepWaterService
+      );
+
+      if (StepWaterService) {
+        this.service = StepWaterService as StepWaterServiceInterface;
+      }
     }
   }
 
   /**
    * Start the native foreground service
    * This must be called when the app starts
+   * Returns true if service start was attempted (even if not immediately running)
    */
   async startService(): Promise<boolean> {
     if (!this.service) {
@@ -41,7 +51,11 @@ class NativeStepWaterService {
     }
 
     try {
-      return await this.service.startService();
+      // startService() returns true if the start intent was sent successfully
+      // The service might not be marked as "running" immediately, so we return true
+      // if the start command was issued, regardless of immediate status
+      const result = await this.service.startService();
+      return result;
     } catch (error) {
       console.error('❌ Error starting native service:', error);
       return false;
@@ -191,6 +205,24 @@ class NativeStepWaterService {
       return await this.service.resetAllData();
     } catch (error) {
       console.error('❌ Error resetting native service data:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Re-initialize the step counter sensor
+   * Call this after permissions are granted to start step tracking
+   */
+  async reinitializeSensor(): Promise<boolean> {
+    if (!this.service) {
+      return false;
+    }
+
+    try {
+      console.log('🔄 Re-initializing step counter sensor...');
+      return await this.service.reinitializeSensor();
+    } catch (error) {
+      console.error('❌ Error reinitializing sensor:', error);
       return false;
     }
   }

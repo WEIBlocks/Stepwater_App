@@ -102,12 +102,11 @@ const ProfileScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Create backup before deletion
-              await StorageService.createBackup();
-              
+
+
               // Stop pedometer first
               PedometerService.stopPedometer();
-              
+
               // Clear all Supabase data (if configured) - do this before clearing local storage
               try {
                 const { SupabaseStorageService } = await import('../services/supabaseStorage');
@@ -116,35 +115,27 @@ const ProfileScreen: React.FC = () => {
                 // Ignore Supabase errors - local data will still be cleared
                 console.warn('Supabase cleanup error (non-critical):', supabaseError);
               }
-              
-              // Get backup before clearing (to restore it after)
-              const backup = await StorageService.getBackup();
-              
+
               // Clear all AsyncStorage data
               await AsyncStorage.clear();
-              
-              // Restore backup immediately after clearing (so it's available for restore later)
-              if (backup) {
-                await AsyncStorage.setItem('@stepwater:backup_data', JSON.stringify(backup));
-              }
-              
+
               // Reset all store state to initial/zero values
               const store = useStore.getState();
-              
+
               // Reset steps to 0
               store.setCurrentSteps(0);
-              
+
               // Reset goals to defaults
               await store.setStepGoal(10000);
               await store.setWaterGoal(2000);
-              
+
               // Reset achievements
               store.resetAchievements();
-              
+
               // Reset pedometer and loading state
               store.setPedometerAvailable(false);
               store.setLoading(false);
-              
+
               // Manually reset all state values to zero/defaults
               useStore.setState({
                 currentSteps: 0,
@@ -163,13 +154,13 @@ const ProfileScreen: React.FC = () => {
                 lastAchievementStep: false,
                 lastAchievementWater: false,
               });
-              
+
               // Save default goals to storage
               await StorageService.saveGoals({
                 dailySteps: 10000,
                 dailyWaterMl: 2000,
               });
-              
+
               // Save default settings
               await StorageService.saveSettings({
                 unit: 'metric',
@@ -178,16 +169,16 @@ const ProfileScreen: React.FC = () => {
                 notificationsEnabled: true,
                 hasCompletedOnboarding: false,
               });
-              
+
               // Save reset achievements
               await StorageService.saveAchievements({
                 lastAchievementStep: false,
                 lastAchievementWater: false,
               });
-              
+
               // Reset profile state
               setProfile(null);
-              
+
               Alert.alert(
                 'Account Deleted',
                 'All your data has been successfully deleted. You will now be taken back to the onboarding screen.',
@@ -258,7 +249,7 @@ const ProfileScreen: React.FC = () => {
         title="Profile"
         rightIcon="person"
       />
-      
+
       {/* Profile Avatar Section */}
       <View style={styles.avatarSection}>
         <View style={styles.avatarContainer}>

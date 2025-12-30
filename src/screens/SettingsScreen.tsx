@@ -88,12 +88,11 @@ const SettingsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Create backup before deletion
-              await StorageService.createBackup();
-              
+
+
               // Stop pedometer first
               PedometerService.stopPedometer();
-              
+
               // Stop native service on Android (if running)
               if (Platform.OS === 'android') {
                 try {
@@ -105,7 +104,7 @@ const SettingsScreen: React.FC = () => {
                   console.warn('Error stopping native service:', nativeError);
                 }
               }
-              
+
               // Clear all Supabase data (if configured) - do this before clearing local storage
               try {
                 const { SupabaseStorageService } = await import('../services/supabaseStorage');
@@ -114,35 +113,12 @@ const SettingsScreen: React.FC = () => {
                 // Ignore Supabase errors - local data will still be cleared
                 console.warn('Supabase cleanup error (non-critical):', supabaseError);
               }
-              
-              // Get backup before clearing (to restore it after)
-              const backup = await StorageService.getBackup();
-              
-              // Clear all AsyncStorage data (this includes profile, settings, goals, etc.)
+
+              // Clear all AsyncStorage data
               await AsyncStorage.clear();
-              
-              // Restore backup immediately after clearing (so it's available for restore later)
-              if (backup) {
-                await AsyncStorage.setItem('@stepwater:backup_data', JSON.stringify(backup));
-              }
-              
-              // Reset all store state to initial/zero values
-              const store = useStore.getState();
-              
-              // Reset steps to 0
-              store.setCurrentSteps(0);
-              
-              // Reset goals to defaults
-              await store.setStepGoal(10000);
-              await store.setWaterGoal(2000);
-              
-              // Reset achievements
-              store.resetAchievements();
-              
-              // Reset pedometer and loading state
-              store.setPedometerAvailable(false);
-              store.setLoading(false);
-              
+
+
+
               // Manually reset all state values to zero/defaults
               useStore.setState({
                 currentSteps: 0,
@@ -161,13 +137,13 @@ const SettingsScreen: React.FC = () => {
                 lastAchievementStep: false,
                 lastAchievementWater: false,
               });
-              
+
               // Save default goals to storage
               await StorageService.saveGoals({
                 dailySteps: 10000,
                 dailyWaterMl: 2000,
               });
-              
+
               // Save default settings (with onboarding reset)
               await StorageService.saveSettings({
                 unit: 'metric',
@@ -176,19 +152,19 @@ const SettingsScreen: React.FC = () => {
                 notificationsEnabled: true,
                 hasCompletedOnboarding: false,
               });
-              
+
               // Clear user profile
               await AsyncStorage.removeItem('@stepwater:user_profile');
-              
+
               // Clear onboarding flag
               await AsyncStorage.removeItem('@stepwater:onboarding_completed');
-              
+
               // Save reset achievements
               await StorageService.saveAchievements({
                 lastAchievementStep: false,
                 lastAchievementWater: false,
               });
-              
+
               // Reset native service data on Android
               if (Platform.OS === 'android') {
                 try {
@@ -223,7 +199,7 @@ const SettingsScreen: React.FC = () => {
                   // Continue anyway - local data is already cleared
                 }
               }
-              
+
               Alert.alert(
                 'Data Deleted',
                 'All your data has been successfully deleted. You will now be taken back to the onboarding screen.',
@@ -266,8 +242,8 @@ const SettingsScreen: React.FC = () => {
         onBackPress={() => navigation.navigate('Reminders')}
       />
 
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -275,8 +251,8 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>General</Text>
           <View style={styles.card}>
-            <TouchableOpacity 
-              style={[styles.settingRow, styles.settingRowWithBorder]} 
+            <TouchableOpacity
+              style={[styles.settingRow, styles.settingRowWithBorder]}
               onPress={handleEditProfile}
               activeOpacity={0.7}
             >
@@ -390,8 +366,8 @@ const SettingsScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Legal</Text>
           <View style={styles.card}>
-            <TouchableOpacity 
-              style={[styles.settingRow, styles.settingRowWithBorder]} 
+            <TouchableOpacity
+              style={[styles.settingRow, styles.settingRowWithBorder]}
               onPress={handlePrivacyPolicy}
               activeOpacity={0.7}
             >
@@ -400,8 +376,8 @@ const SettingsScreen: React.FC = () => {
               </View>
               <Text style={styles.chevron}>›</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.settingRow} 
+            <TouchableOpacity
+              style={styles.settingRow}
               onPress={handleTermsOfService}
               activeOpacity={0.7}
             >

@@ -5,6 +5,7 @@
 
 import { testSupabaseConnection, SupabaseConnectionStatus } from './supabase';
 import { supabase } from './supabase';
+import { getTodayDateString } from '../utils/formatting';
 
 /**
  * Comprehensive Supabase API test
@@ -40,7 +41,7 @@ export async function runFullSupabaseTest(): Promise<{
   results.details.push('Testing basic connection...');
   const connectionStatus = await testSupabaseConnection();
   results.results.connection = connectionStatus.connected;
-  
+
   if (!connectionStatus.connected) {
     results.details.push(`❌ Connection failed: ${connectionStatus.error || 'Unknown error'}`);
     console.log('❌ Connection test failed, skipping API tests');
@@ -67,7 +68,7 @@ export async function runFullSupabaseTest(): Promise<{
         results.results.daySummaries = true;
 
         // Test INSERT (if table is empty or we can insert)
-        const testDate = new Date().toISOString().split('T')[0];
+        const testDate = getTodayDateString();
         const { error: insertError } = await supabase
           .from('day_summaries')
           .upsert({
@@ -157,10 +158,10 @@ export async function runFullSupabaseTest(): Promise<{
   }
 
   // Final result
-  results.success = 
-    results.results.connection && 
-    (results.results.daySummaries || results.results.waterLogs || 
-     results.results.userGoals || results.results.reminders);
+  results.success =
+    results.results.connection &&
+    (results.results.daySummaries || results.results.waterLogs ||
+      results.results.userGoals || results.results.reminders);
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   if (results.success) {

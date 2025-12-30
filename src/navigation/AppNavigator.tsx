@@ -7,8 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../state/store';
 import { StorageService } from '../services/storage';
 import { nativeStepWaterService } from '../services/nativeStepWaterService';
-import { PedometerService } from '../services/pedometer';
-import { NotificationService } from '../services/notifications';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
@@ -210,10 +208,12 @@ const AppNavigator = () => {
       // Check setup status silently (in case user deleted data)
       await checkSetup(true);
 
-      // Ensure native service is running
+      // Ensure native service is running (should already be running from App.tsx)
+      // But check and restart if needed (e.g., if service was killed)
       if (Platform.OS === 'android') {
         const isRunning = await nativeStepWaterService.isServiceRunning();
         if (!isRunning) {
+          console.log('🔄 Native service not running, restarting...');
           await nativeStepWaterService.startService().catch(err => {
             console.warn('Silent refresh native service start failed:', err);
           });
@@ -277,22 +277,11 @@ const AppNavigator = () => {
         loadSettings().catch(err => console.warn('Restore loadSettings failed:', err)),
       ]);
 
-      // Restore permissions (check and request if needed)
-      await Promise.allSettled([
-        PedometerService.requestPermissions().catch(err => console.warn('Pedometer permissions failed:', err)),
-        NotificationService.requestPermissions().catch(err => console.warn('Notification permissions failed:', err)),
-      ]);
+      // Permissions are now requested after UI is ready (in HomeScreen)
+      // to prevent blocking cold launch, splash dismissal, or data restoration
 
-      // Restore native service
-      if (Platform.OS === 'android') {
-        setTimeout(async () => {
-          try {
-            await nativeStepWaterService.startService();
-          } catch (error) {
-            console.warn('Native service start failed:', error);
-          }
-        }, 500);
-      }
+      // Note: Native service is already started immediately in App.tsx on app launch
+      // No need to start it here - it's already running independently of permissions
 
       // Check user setup status (skip loading state since we're managing it here)
       await checkSetup(true);

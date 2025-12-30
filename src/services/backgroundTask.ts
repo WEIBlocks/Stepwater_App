@@ -8,6 +8,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ForegroundNotificationService } from './foregroundNotification';
+import { getTodayDateString } from '../utils/formatting';
 
 const BACKGROUND_TASK_NAME = 'STEP_WATER_BACKGROUND_TASK';
 const STORAGE_KEY_GOALS = '@stepwater:goals';
@@ -26,8 +27,8 @@ let lastKnownWaterGoal: number | null = null;
 async function getCurrentSteps(): Promise<number> {
   try {
     // Get today's date string
-    const today = new Date().toISOString().split('T')[0];
-    
+    const today = getTodayDateString();
+
     // Read from day summaries storage
     const summariesData = await AsyncStorage.getItem(STORAGE_KEY_DAY_SUMMARIES);
     if (summariesData) {
@@ -37,7 +38,7 @@ async function getCurrentSteps(): Promise<number> {
         return todaySummary.steps;
       }
     }
-    
+
     return 0;
   } catch (error) {
     console.error('❌ Error getting current steps:', error);
@@ -50,9 +51,9 @@ async function getCurrentSteps(): Promise<number> {
  */
 async function getCurrentWater(): Promise<number> {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     const waterLogsKey = `${STORAGE_KEY_WATER_LOGS}_${today}`;
-    
+
     const waterLogsData = await AsyncStorage.getItem(waterLogsKey);
     if (waterLogsData) {
       const logs = JSON.parse(waterLogsData);
@@ -61,7 +62,7 @@ async function getCurrentWater(): Promise<number> {
         return totalWater;
       }
     }
-    
+
     return 0;
   } catch (error) {
     console.error('❌ Error getting current water:', error);
@@ -82,7 +83,7 @@ async function getGoals(): Promise<{ stepGoal: number; waterGoal: number }> {
         waterGoal: goals.dailyWaterMl || 2000,
       };
     }
-    
+
     return {
       stepGoal: 10000,
       waterGoal: 2000,
@@ -126,7 +127,7 @@ async function backgroundTaskHandler(): Promise<void> {
       getGoals(),
       getWaterUnit(),
     ]);
-    
+
     // Convert water to appropriate unit if needed
     let waterDisplay = water;
     let waterGoalDisplay = goals.waterGoal;
@@ -134,16 +135,16 @@ async function backgroundTaskHandler(): Promise<void> {
       waterDisplay = Math.round(water / 29.5735); // Convert ml to oz
       waterGoalDisplay = Math.round(goals.waterGoal / 29.5735);
     }
-    
+
     // THROTTLING: Only update if values actually changed
     // This prevents notification spam when data hasn't changed
     const stepsChanged = lastKnownSteps === null || steps !== lastKnownSteps;
     const waterChanged = lastKnownWater === null || waterDisplay !== lastKnownWater;
     const stepGoalChanged = lastKnownStepGoal === null || goals.stepGoal !== lastKnownStepGoal;
     const waterGoalChanged = lastKnownWaterGoal === null || waterGoalDisplay !== lastKnownWaterGoal;
-    
+
     const hasChanges = stepsChanged || waterChanged || stepGoalChanged || waterGoalChanged;
-    
+
     // Only update notification if there are actual changes
     if (hasChanges && ForegroundNotificationService.isRunning()) {
       // Update existing notification in place (this will NOT create a new notification)
@@ -154,7 +155,7 @@ async function backgroundTaskHandler(): Promise<void> {
         waterGoalDisplay,
         unit
       );
-      
+
       // Update last known values after successful update
       lastKnownSteps = steps;
       lastKnownWater = waterDisplay;
@@ -228,13 +229,13 @@ export class BackgroundTaskService {
         this.updateInterval = null;
       }
       this.isRunning = false;
-      
+
       // Reset last known values when stopping
       lastKnownSteps = null;
       lastKnownWater = null;
       lastKnownStepGoal = null;
       lastKnownWaterGoal = null;
-      
+
       console.log('🛑 Background task unregistered');
     } catch (error) {
       console.error('❌ Error unregistering background task:', error);

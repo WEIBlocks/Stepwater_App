@@ -16,7 +16,6 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../state/store';
 import { StorageService } from '../services/storage';
-import { NotificationService } from '../services/notifications';
 import { COLORS } from '../utils/constants';
 import { wp, hp, rf, rs, rp, rm, SCREEN_WIDTH, SCREEN_HEIGHT } from '../utils/responsive';
 
@@ -107,10 +106,9 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
   };
 
   const handleFinish = async () => {
-    // Request notification permissions
-    await NotificationService.requestPermissions();
-    
     // Mark onboarding as complete
+    // Permissions are now requested after UI is ready (in HomeScreen)
+    // to prevent blocking onboarding completion
     await StorageService.setOnboardingCompleted();
     const settings = await StorageService.getSettings();
     await StorageService.saveSettings({

@@ -6,9 +6,6 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Dimensions,
-  ActivityIndicator,
-  Alert,
-  Modal,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -23,7 +20,6 @@ import { Svg, Circle, Path } from 'react-native-svg';
 import { wp, hp, rf, rs, rp, rm, SCREEN_WIDTH, SCREEN_HEIGHT } from '../utils/responsive';
 import { StorageService } from '../services/storage';
 import { useStore } from '../state/store';
-import { SupabaseStorageService } from '../services/supabaseStorage';
 
 interface GenderSelectionScreenProps {
   onSelect: (gender: Gender) => void;
@@ -35,17 +31,11 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
   onSkip,
 }) => {
   const [selectedGender, setSelectedGender] = useState<Gender>(null);
-  const [isRestoring, setIsRestoring] = useState(false);
-  const [showMergeReplaceModal, setShowMergeReplaceModal] = useState(false);
-  const [hasBackup, setHasBackup] = useState(false);
+
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
-  
-  const store = useStore();
-  const loadTodayData = store.loadTodayData;
-  const loadGoals = store.loadGoals;
-  const loadReminders = store.loadReminders;
-  const loadSettings = store.loadSettings;
+
+
 
   const handleSelect = (gender: Gender) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -64,149 +54,9 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
     onSkip();
   };
 
-  // Check if backup exists on mount
-  React.useEffect(() => {
-    const checkBackup = async () => {
-      const backupExists = await StorageService.hasBackup();
-      setHasBackup(backupExists);
-    };
-    checkBackup();
-  }, []);
 
-  const handleRestoreData = async () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      
-      // Check if backup exists
-      const backupExists = await StorageService.hasBackup();
-      if (!backupExists) {
-        Alert.alert(
-          'No Previous Data Found',
-          'No previous data was found to restore.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
 
-      // Show merge/replace dialog
-      setShowMergeReplaceModal(true);
-    } catch (error) {
-      console.error('Error checking backup:', error);
-      Alert.alert(
-        'Error',
-        'Failed to check for backup data. Please try again.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
 
-  const handleRestoreConfirm = async (shouldRestore: boolean) => {
-    try {
-      setIsRestoring(true);
-      setShowMergeReplaceModal(false);
-
-      if (shouldRestore) {
-        // Merge with Current Data - Restore the data
-        await StorageService.restoreFromBackup();
-        
-        // Sync restored data to Supabase if user is logged in
-        try {
-          const { supabase } = await import('../services/supabase');
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session && session.user) {
-            const backup = await StorageService.getBackup();
-            if (backup) {
-              // Sync day summaries
-              if (backup.daySummaries && backup.daySummaries.length > 0) {
-                for (const summary of backup.daySummaries) {
-                  await SupabaseStorageService.saveDaySummary(summary).catch(() => {});
-                }
-              }
-              
-              // Sync water logs
-              if (backup.waterLogs && backup.waterLogs.length > 0) {
-                for (const log of backup.waterLogs) {
-                  await SupabaseStorageService.addWaterLog(log).catch(() => {});
-                }
-              }
-              
-              // Sync goals
-              if (backup.goals) {
-                await SupabaseStorageService.saveGoals(backup.goals).catch(() => {});
-              }
-              
-              // Sync reminders
-              if (backup.reminders && backup.reminders.length > 0) {
-                await SupabaseStorageService.saveReminders(backup.reminders).catch(() => {});
-              }
-            }
-          }
-        } catch (supabaseError) {
-          console.warn('Supabase sync after restore failed:', supabaseError);
-        }
-        
-        // Reload store data
-        await Promise.all([
-          loadTodayData(),
-          loadGoals(),
-          loadReminders(),
-          loadSettings(),
-        ]);
-        
-        // Restore achievements to store
-        const achievements = await StorageService.getAchievements();
-        if (achievements) {
-          useStore.setState({
-            lastAchievementStep: achievements.lastAchievementStep || false,
-            lastAchievementWater: achievements.lastAchievementWater || false,
-          });
-        }
-        
-        // Check if profile exists and is completed after restore
-        const hasCompletedProfile = await StorageService.hasCompletedProfile();
-        if (hasCompletedProfile) {
-          // Profile exists - mark onboarding as completed and navigate to home
-          await StorageService.setOnboardingCompleted();
-          
-          // Trigger checkSetup in AppNavigator to update state and navigate
-          const checkSetup = (global as any).__appNavigatorCheckSetup;
-          if (checkSetup) {
-            await checkSetup();
-          }
-        }
-        
-        // Clear backup after successful restore
-        await StorageService.clearBackup();
-        setHasBackup(false);
-        
-        Alert.alert(
-          'Data Restored',
-          'Your previous data has been successfully restored!',
-          [{ text: 'OK' }]
-        );
-      } else {
-        // Replace Current Data - Just clear the backup and hide the button
-        // User will continue with setup (gender and profile)
-        await StorageService.clearBackup();
-        setHasBackup(false);
-        
-        Alert.alert(
-          'Backup Cleared',
-          'The backup has been cleared. You can continue with a fresh start.',
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error('Error handling restore:', error);
-      Alert.alert(
-        'Error',
-        'An error occurred. Please try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsRestoring(false);
-    }
-  };
 
   const animatedScale = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -251,7 +101,7 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
           { borderColor: isSelected ? color : COLORS.light.border },
         ]}
       >
-        <Animated.View style={optionAnimatedStyle}>
+        <Animated.View style={[optionAnimatedStyle, { display: 'flex', alignItems: 'center', justifyContent: 'center' }]}>
           <View
             style={[
               styles.genderCircle,
@@ -384,72 +234,8 @@ const GenderSelectionScreen: React.FC<GenderSelectionScreenProps> = ({
           >
             <Text style={styles.nextButtonText}>NEXT</Text>
           </TouchableOpacity>
-          {hasBackup && (
-            <TouchableOpacity 
-              onPress={handleRestoreData} 
-              style={styles.restoreButton}
-              disabled={isRestoring}
-            >
-              {isRestoring ? (
-                <ActivityIndicator size="small" color="#94A3B8" />
-              ) : (
-                <Text style={styles.restoreText}>Restore Data</Text>
-              )}
-            </TouchableOpacity>
-          )}
         </View>
       </Animated.View>
-
-      {/* Merge/Replace Modal */}
-      <Modal
-        visible={showMergeReplaceModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowMergeReplaceModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Restore Data</Text>
-            <Text style={styles.modalMessage}>
-              How would you like to restore your data?
-            </Text>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.mergeButton]}
-                onPress={() => handleRestoreConfirm(true)}
-                disabled={isRestoring}
-              >
-                <Text style={styles.modalButtonText}>Merge with Current Data</Text>
-                <Text style={styles.modalButtonSubtext}>
-                  Restore your last deleted data (steps, goals, water, reminders, etc.)
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalButton, styles.replaceButton]}
-                onPress={() => handleRestoreConfirm(false)}
-                disabled={isRestoring}
-              >
-                <Text style={styles.modalButtonText}>Replace Current Data</Text>
-                <Text style={styles.modalButtonSubtext}>
-                  Don't restore and clear the backup
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowMergeReplaceModal(false);
-                }}
-                disabled={isRestoring}
-              >
-                <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -510,6 +296,7 @@ const styles = StyleSheet.create({
   genderOption: {
     alignItems: 'center',
     justifyContent: 'center',
+    display: 'flex',
     padding: rp(24),
     borderRadius: rs(20),
     borderWidth: rs(2),
@@ -560,84 +347,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 1,
   },
-  restoreButton: {
-    padding: rp(12),
-    alignItems: 'center',
-  },
-  restoreText: {
-    fontSize: rf(14),
-    color: '#94A3B8',
-  },
   genderSymbolContainer: {
     width: rs(60),
     height: rs(60),
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: rp(24),
-  },
-  modalContent: {
-    backgroundColor: '#1E293B',
-    borderRadius: rs(20),
-    padding: rp(24),
-    width: '100%',
-    maxWidth: rs(400),
-    borderWidth: rs(1),
-    borderColor: '#334155',
-  },
-  modalTitle: {
-    fontSize: rf(24),
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: rm(8),
-    textAlign: 'center',
-  },
-  modalMessage: {
-    fontSize: rf(16),
-    color: '#94A3B8',
-    marginBottom: rm(24),
-    textAlign: 'center',
-    lineHeight: rf(22),
-  },
-  modalButtons: {
-    gap: rm(12),
-  },
-  modalButton: {
-    padding: rp(16),
-    borderRadius: rs(12),
-    borderWidth: rs(2),
-    backgroundColor: '#0F172A',
-  },
-  mergeButton: {
-    borderColor: '#3B82F6',
-  },
-  replaceButton: {
-    borderColor: '#10B981',
-  },
-  cancelButton: {
-    borderColor: '#475569',
-    marginTop: rm(8),
-  },
-  modalButtonText: {
-    fontSize: rf(16),
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: rm(4),
-  },
-  modalButtonSubtext: {
-    fontSize: rf(12),
-    color: '#94A3B8',
-    textAlign: 'center',
-    fontWeight: '400',
-  },
-  cancelButtonText: {
-    color: '#94A3B8',
   },
 });
 

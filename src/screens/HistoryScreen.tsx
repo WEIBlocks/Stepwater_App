@@ -10,24 +10,25 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import Svg, { Polyline, Circle, Line, G } from 'react-native-svg';
+
 import { COLORS } from '../utils/constants';
 import { theme } from '../utils/theme';
 import { StorageService } from '../services/storage';
 import { DaySummary } from '../types';
 import { useStore } from '../state/store';
-import { formatSteps, formatWater, getTodayDateString } from '../utils/formatting';
+import { formatSteps, formatWater, getTodayDateString, formatDateToLocalIsoDate } from '../utils/formatting';
 import { wp, hp, rf, rs, rp, rm, SCREEN_WIDTH, SCREEN_HEIGHT } from '../utils/responsive';
-import { Header } from '../components';
+import { Header, Chart } from '../components';
 
 type RangeFilter = 'daily' | 'weekly' | 'monthly';
 
-const CHART_WIDTH = wp(85);
+// Calculate available width: Screen - ContentPad - CardPad - ChartContainerPad - ChartInternalPad
+const CHART_WIDTH = SCREEN_WIDTH - (rp(20) * 2) - (rp(20) * 2) - (rp(16) * 2) - (theme.spacing.md * 2);
 const CHART_HEIGHT = hp(20);
 
 const HistoryScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { settings, stepGoal, currentSteps, waterConsumed, loadTodayData } = useStore();
+  const { settings, stepGoal, waterGoal, currentSteps, waterConsumed, loadTodayData } = useStore();
   const [summaries, setSummaries] = useState<DaySummary[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [activeRange, setActiveRange] = useState<RangeFilter>('daily');
@@ -107,7 +108,7 @@ const HistoryScreen: React.FC = () => {
       for (let i = 0; i < 7; i++) {
         const d = new Date(start);
         d.setDate(start.getDate() + i);
-        const key = d.toISOString().split('T')[0];
+        const key = formatDateToLocalIsoDate(d);
         const weekdayShort = d.toLocaleDateString('en-US', { weekday: 'short' });
         const readable = d.toLocaleDateString('en-US', {
           weekday: 'short',
@@ -128,8 +129,8 @@ const HistoryScreen: React.FC = () => {
         weekStart.setDate(weekEnd.getDate() - 6);
 
         // Get ISO date strings for range
-        const weekStartStr = weekStart.toISOString().split('T')[0];
-        const weekEndStr = weekEnd.toISOString().split('T')[0];
+        const weekStartStr = formatDateToLocalIsoDate(weekStart);
+        const weekEndStr = formatDateToLocalIsoDate(weekEnd);
 
         let weekSteps = 0;
         let weekWater = 0;
@@ -165,8 +166,8 @@ const HistoryScreen: React.FC = () => {
         const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
 
         // Get ISO date strings for range
-        const monthStartStr = monthStart.toISOString().split('T')[0];
-        const monthEndStr = monthEnd.toISOString().split('T')[0];
+        const monthStartStr = formatDateToLocalIsoDate(monthStart);
+        const monthEndStr = formatDateToLocalIsoDate(monthEnd);
 
         let monthSteps = 0;
         let monthWater = 0;
@@ -225,7 +226,7 @@ const HistoryScreen: React.FC = () => {
     let cursor = new Date(todayKey);
 
     while (true) {
-      const key = cursor.toISOString().split('T')[0];
+      const key = formatDateToLocalIsoDate(cursor);
       const steps = dateToSteps[key] || 0;
       if (steps >= stepGoal && cursor >= new Date(sorted[0].date)) {
         streak += 1;
@@ -254,6 +255,18 @@ const HistoryScreen: React.FC = () => {
     }
   }, [series.steps.length, series.water.length, activeRange]);
 
+  const { stepScale, waterScale } = useMemo(() => {
+    switch (activeRange) {
+      case 'weekly':
+        return { stepScale: stepGoal * 7, waterScale: waterGoal * 7 };
+      case 'monthly':
+        return { stepScale: stepGoal * 30, waterScale: waterGoal * 30 };
+      case 'daily':
+      default:
+        return { stepScale: stepGoal, waterScale: waterGoal };
+    }
+  }, [activeRange, stepGoal, waterGoal]);
+
   const renderStepsLineChart = () => {
     const { axisLabels, readableLabels, steps } = series;
 
@@ -268,23 +281,11 @@ const HistoryScreen: React.FC = () => {
     const selectedLabel = readableLabels[activeStepIndex] || '--';
     const selectedValue = steps[activeStepIndex] || 0;
 
-    const labels = axisLabels;
-    const maxSteps = Math.max(...steps, 1);
-    const paddingTop = 24;
-    const paddingBottom = 40;
-    const paddingLeft = 16;
-    const paddingRight = 16;
-    const innerHeight = CHART_HEIGHT - paddingTop - paddingBottom;
-    const innerWidth = CHART_WIDTH - paddingLeft - paddingRight;
-    const stepX = labels.length > 1 ? innerWidth / (labels.length - 1) : 0;
-
-    const points = steps.map((v, idx) => {
-      const x = paddingLeft + stepX * idx;
-      const y = paddingTop + innerHeight - (v / maxSteps) * innerHeight;
-      return `${x},${y}`;
-    });
-
-    const gridLines = [0.25, 0.5, 0.75, 1.0];
+    const chartData = steps.map((value, index) => ({
+      label: axisLabels[index],
+      value,
+      labelSecondary: readableLabels[index],
+    }));
 
     return (
       <View style={styles.chartWrapper}>
@@ -293,9 +294,9 @@ const HistoryScreen: React.FC = () => {
             <Text style={styles.chartInfoLabel}>
               {activeRange === 'daily' ? 'Selected day' : activeRange === 'weekly' ? 'Selected week' : 'Selected month'}
             </Text>
-            <Text 
-              style={styles.chartInfoValue} 
-              numberOfLines={2} 
+            <Text
+              style={styles.chartInfoValue}
+              numberOfLines={2}
               ellipsizeMode="tail"
             >
               {selectedLabel}
@@ -303,9 +304,9 @@ const HistoryScreen: React.FC = () => {
           </View>
           <View style={styles.chartInfoRight}>
             <Text style={styles.chartInfoLabel}>Steps</Text>
-            <Text 
-              style={styles.chartInfoBig} 
-              numberOfLines={1} 
+            <Text
+              style={styles.chartInfoBig}
+              numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.7}
             >
@@ -313,90 +314,18 @@ const HistoryScreen: React.FC = () => {
             </Text>
           </View>
         </View>
-        <View style={styles.chartSvgContainer}>
-          <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
-            {/* Grid lines */}
-            {gridLines.map((ratio, idx) => {
-              const y = paddingTop + innerHeight * (1 - ratio);
-              return (
-                <Line
-                  key={idx}
-                  x1={paddingLeft}
-                  y1={y}
-                  x2={CHART_WIDTH - paddingRight}
-                  y2={y}
-                  stroke={theme.colors.border}
-                  strokeDasharray="3 4"
-                  strokeWidth={0.5}
-                  opacity={0.3}
-                />
-              );
-            })}
-            {/* Baseline */}
-            <Line
-              x1={paddingLeft}
-              y1={CHART_HEIGHT - paddingBottom}
-              x2={CHART_WIDTH - paddingRight}
-              y2={CHART_HEIGHT - paddingBottom}
-              stroke={theme.colors.border}
-              strokeWidth={1.5}
-            />
-            {/* Line chart */}
-            <Polyline
-              points={points.join(' ')}
-              fill="none"
-              stroke={theme.colors.steps}
-              strokeWidth={3.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            {/* Data points */}
-            {steps.map((v, idx) => {
-              const x = paddingLeft + stepX * idx;
-              const y = paddingTop + innerHeight - (v / maxSteps) * innerHeight;
-              const isActive = idx === activeStepIndex;
-              return (
-                <G key={idx} onPress={() => setActiveStepIndex(idx)}>
-                  {/* Outer glow for active point */}
-                  {isActive && (
-                    <Circle
-                      cx={x}
-                      cy={y}
-                      r={10}
-                      fill={theme.colors.steps}
-                      opacity={0.25}
-                    />
-                  )}
-                  <Circle
-                    cx={x}
-                    cy={y}
-                    r={isActive ? 7 : 5}
-                    fill={isActive ? theme.colors.steps : theme.colors.card}
-                    stroke={isActive ? theme.colors.steps : theme.colors.steps + '80'}
-                    strokeWidth={isActive ? 3 : 2}
-                  />
-                </G>
-              );
-            })}
-          </Svg>
-        </View>
-        <View style={styles.chartLabelsRow}>
-          {labels.map((l, idx) => (
-            <View key={idx} style={styles.chartLabelContainer}>
-              <Text
-                style={[
-                  styles.chartLabel,
-                  idx === activeStepIndex && styles.chartLabelActive,
-                ]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-              >
-                {l}
-              </Text>
-            </View>
-          ))}
-        </View>
+
+        <Chart
+          data={chartData}
+          barColor={theme.colors.steps}
+          activeBarColor={theme.colors.steps}
+          selectedIndex={activeStepIndex}
+          onSelect={setActiveStepIndex}
+          formatValue={(v) => formatSteps(v)}
+          height={CHART_HEIGHT}
+          width={CHART_WIDTH}
+          maxScaleValue={stepScale}
+        />
       </View>
     );
   };
@@ -412,9 +341,14 @@ const HistoryScreen: React.FC = () => {
       );
     }
 
-    const maxWater = Math.max(...water, 1);
     const selectedLabel = readableLabels[activeWaterIndex] || '--';
     const selectedValue = water[activeWaterIndex] || 0;
+
+    const chartData = water.map((value, index) => ({
+      label: axisLabels[index],
+      value,
+      labelSecondary: readableLabels[index],
+    }));
 
     return (
       <View style={styles.chartWrapper}>
@@ -423,9 +357,9 @@ const HistoryScreen: React.FC = () => {
             <Text style={styles.chartInfoLabel}>
               {activeRange === 'daily' ? 'Selected day' : activeRange === 'weekly' ? 'Selected week' : 'Selected month'}
             </Text>
-            <Text 
-              style={styles.chartInfoValue} 
-              numberOfLines={2} 
+            <Text
+              style={styles.chartInfoValue}
+              numberOfLines={2}
               ellipsizeMode="tail"
             >
               {selectedLabel}
@@ -433,7 +367,7 @@ const HistoryScreen: React.FC = () => {
           </View>
           <View style={styles.chartInfoRight}>
             <Text style={styles.chartInfoLabel}>Water</Text>
-                <Text
+            <Text
               style={[styles.chartInfoBig, { color: COLORS.secondary }]}
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -443,74 +377,20 @@ const HistoryScreen: React.FC = () => {
             </Text>
           </View>
         </View>
-        <View style={styles.chartBarsContainer}>
-          <View style={styles.chartBarsRow}>
-            {water.map((v, idx) => {
-              const isActive = idx === activeWaterIndex;
-              const barHeight = (v / maxWater) * 100 || 0;
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.chartBarWrapper}
-                  activeOpacity={0.7}
-                  onPress={() => setActiveWaterIndex(idx)}
-                >
-                  <View style={styles.chartBarContainer}>
-                    <View
-                  style={[
-                        styles.chartBarTrack,
-                        isActive && styles.chartBarTrackActive,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.chartBarFill,
-                          {
-                            height: `${barHeight}%`,
-                            backgroundColor: isActive
-                              ? theme.colors.water
-                              : theme.colors.water + '90',
-                          },
-                        ]}
-                      />
-                    </View>
-                    {isActive && v > 0 && (
-                      <View style={styles.chartBarValueContainer}>
-                        <Text
-                          style={styles.chartBarValue}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit
-                          minimumFontScale={0.75}
-                        >
-                          {formatWater(v, settings.unit)}
-                </Text>
-                      </View>
-                    )}
-                  </View>
-              </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-        <View style={styles.chartLabelsRow}>
-          {axisLabels.map((l, idx) => (
-            <View key={idx} style={styles.chartLabelContainer}>
-              <Text
-                style={[
-                  styles.chartLabel,
-                  idx === activeWaterIndex && styles.chartLabelActive,
-                ]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-              >
-                {l}
-                </Text>
-            </View>
-          ))}
-        </View>
-    </View>
-  );
+
+        <Chart
+          data={chartData}
+          barColor={theme.colors.water}
+          activeBarColor={theme.colors.water}
+          selectedIndex={activeWaterIndex}
+          onSelect={setActiveWaterIndex}
+          formatValue={(v) => formatWater(v, settings.unit)}
+          height={CHART_HEIGHT}
+          width={CHART_WIDTH}
+          maxScaleValue={waterScale}
+        />
+      </View>
+    );
   };
 
   return (
@@ -562,8 +442,8 @@ const HistoryScreen: React.FC = () => {
                 {activeRange === 'daily'
                   ? 'Last 7 days'
                   : activeRange === 'weekly'
-                  ? 'Last 4 weeks'
-                  : 'Last 3 months'}
+                    ? 'Last 4 weeks'
+                    : 'Last 3 months'}
               </Text>
             </View>
             <View style={styles.cardBadge}>
@@ -590,8 +470,8 @@ const HistoryScreen: React.FC = () => {
                 {activeRange === 'daily'
                   ? 'Last 7 days'
                   : activeRange === 'weekly'
-                  ? 'Last 4 weeks'
-                  : 'Last 3 months'}
+                    ? 'Last 4 weeks'
+                    : 'Last 3 months'}
               </Text>
             </View>
             <View style={[styles.cardBadge, { backgroundColor: theme.colors.water + '20' }]}>

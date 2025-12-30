@@ -22,6 +22,7 @@ import { UserProfile } from '../types';
 import { COLORS } from '../utils/constants';
 import { wp, hp, rf, rs, rp, rm, SCREEN_WIDTH, SCREEN_HEIGHT } from '../utils/responsive';
 import { Header } from '../components';
+import { Svg, Circle, Path } from 'react-native-svg';
 
 interface ProfileSetupScreenProps {
   gender: string | null;
@@ -313,9 +314,58 @@ const ProfileSetupScreen: React.FC<ProfileSetupScreenProps> = ({
         <View style={styles.avatarSection}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {selectedGender === 'male' ? '♂' : selectedGender === 'female' ? '♀' : '👤'}
-              </Text>
+              <View style={styles.avatarIconContainer}>
+                <Svg width={rs(70)} height={rs(70)} viewBox="0 0 60 60">
+                  {selectedGender === 'female' && (
+                    <>
+                      <Circle cx="30" cy="20" r="6" fill={COLORS.primary} />
+                      <Path
+                        d="M 30 26 L 30 44"
+                        stroke={COLORS.primary}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                      <Path
+                        d="M 22 32 L 30 26 L 38 32"
+                        stroke={COLORS.primary}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        fill="none"
+                      />
+                    </>
+                  )}
+                  {selectedGender === 'male' && (
+                    <>
+                      <Circle cx="30" cy="20" r="6" fill={COLORS.primary} />
+                      <Path
+                        d="M 30 26 L 30 40"
+                        stroke={COLORS.primary}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                      <Path
+                        d="M 26 28 L 30 24 L 34 28"
+                        stroke={COLORS.primary}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        fill="none"
+                      />
+                    </>
+                  )}
+                  {(selectedGender === 'other' || selectedGender === null) && (
+                    <>
+                      <Circle cx="30" cy="20" r="8" fill="none" stroke={COLORS.primary} strokeWidth="2.5" />
+                      <Path
+                        d="M 30 28 L 30 42"
+                        stroke={COLORS.primary}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      />
+                      <Circle cx="30" cy="46" r="3" fill={COLORS.primary} />
+                    </>
+                  )}
+                </Svg>
+              </View>
             </View>
           </View>
         </View>
@@ -604,6 +654,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary + '15',
     borderWidth: 3,
     borderColor: COLORS.primary + '30',
+    display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: COLORS.primary,
@@ -612,9 +663,11 @@ const styles = StyleSheet.create({
     shadowRadius: rs(8),
     elevation: 4,
   },
-  avatarText: {
-    fontSize: rf(36),
-    color: COLORS.primary,
+  avatarIconContainer: {
+    width: rs(70),
+    height: rs(70),
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   genderSection: {
     marginBottom: rm(28),

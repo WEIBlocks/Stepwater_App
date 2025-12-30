@@ -1,6 +1,6 @@
 module.exports = {
   expo: {
-    owner: "organization-s", // <-- ADD THIS LINE
+    owner: "sultan2", // <-- ADD THIS LINE
     name: "Step & Water",
     slug: "step-water-app",
     version: "1.0.0",
@@ -10,7 +10,7 @@ module.exports = {
     // App icon and splash screen configuration
     // For production: Add icon.png (1024x1024px) and splash.png (2048x2048px) to assets folder
     // If assets are missing, Expo will use default icons (app will still work)
-    // icon: "./assets/icon.png", // Uncomment when you add icon.png
+    icon: "./assets/icon.png", // App icon
     userInterfaceStyle: "automatic",
     splash: {
       // image: "./assets/splash.png", // Uncomment when you add splash.png
@@ -32,9 +32,10 @@ module.exports = {
     android: {
       adaptiveIcon: {
         backgroundColor: "#6366f1",
-        // foregroundImage: "./assets/icon.png" // Uncomment when you add icon.png
+        foregroundImage: "./assets/icon.png" // Android adaptive icon foreground
       },
       package: "com.stepwater.app",
+      label: "Step & Water", // Explicit app label for Android
       versionCode: 1,
       permissions: [
         "ACTIVITY_RECOGNITION",

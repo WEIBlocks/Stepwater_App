@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -14,16 +15,20 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import android.util.Log
 
 class StepWaterForegroundService : Service(), SensorEventListener {
     
     companion object {
         const val ACTION_UPDATE_WATER = "com.stepwater.service.UPDATE_WATER"
+        const val ACTION_REINITIALIZE_SENSOR = "com.stepwater.service.REINITIALIZE_SENSOR"
         const val EXTRA_WATER_ML = "water_ml"
         const val NOTIFICATION_ID = 1001
         const val NOTIFICATION_CHANNEL_ID = "stepwater_foreground_channel"
         const val NOTIFICATION_CHANNEL_NAME = "Step & Water Tracker"
+        private const val TAG = "StepWaterService"
         
         @Volatile
         var isServiceRunning: Boolean = false
@@ -58,6 +63,12 @@ class StepWaterForegroundService : Service(), SensorEventListener {
             ACTION_UPDATE_WATER -> {
                 val waterMl = intent.getDoubleExtra(EXTRA_WATER_ML, 0.0).toInt()
                 dataManager?.updateWater(waterMl)
+                updateNotification()
+            }
+            ACTION_REINITIALIZE_SENSOR -> {
+                // Re-initialize sensor (called after permissions are granted)
+                Log.d(TAG, "Re-initializing sensor after permissions granted")
+                initializeStepCounter()
                 updateNotification()
             }
             else -> {
@@ -172,19 +183,57 @@ class StepWaterForegroundService : Service(), SensorEventListener {
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
     
+    private fun hasActivityRecognitionPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ActivityCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.ACTIVITY_RECOGNITION
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android < 10 doesn't require explicit permission
+            true
+        }
+    }
+    
     private fun initializeStepCounter() {
+        // Check if permission is granted before registering sensor
+        if (!hasActivityRecognitionPermission()) {
+            Log.w(TAG, "ACTIVITY_RECOGNITION permission not granted, sensor listener not registered")
+            // Don't register sensor if permission not granted
+            // Will be called again via ACTION_REINITIALIZE_SENSOR after permission is granted
+            return
+        }
+        
         stepCounterSensor?.let { sensor ->
-            sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-            
-            // Initialize baseline if first time
-            baselineSteps = dataManager?.getBaselineSteps() ?: 0L
-            lastRawSteps = dataManager?.getLastRawSteps() ?: 0L
-            
-            if (baselineSteps == 0L && lastRawSteps == 0L) {
-                // Will be set on first sensor event
+            try {
+                // Unregister existing listener first (if any)
+                try {
+                    sensorManager.unregisterListener(this)
+                } catch (e: Exception) {
+                    // Ignore if not registered
+                }
+                
+                // Register sensor listener
+                val registered = sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+                if (registered) {
+                    Log.d(TAG, "Step counter sensor listener registered successfully")
+                } else {
+                    Log.w(TAG, "Failed to register step counter sensor listener")
+                }
+                
+                // Initialize baseline if first time
+                baselineSteps = dataManager?.getBaselineSteps() ?: 0L
+                lastRawSteps = dataManager?.getLastRawSteps() ?: 0L
+                
+                // Will be set on first sensor event if baseline is 0
+            } catch (e: SecurityException) {
+                Log.e(TAG, "SecurityException registering sensor: ${e.message}", e)
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception registering sensor: ${e.message}", e)
             }
         } ?: run {
             // Step counter not available on this device
+            Log.w(TAG, "Step counter sensor not available on this device")
             updateNotification()
         }
     }
@@ -201,6 +250,7 @@ class StepWaterForegroundService : Service(), SensorEventListener {
                     lastRawSteps = currentRawSteps
                     dataManager?.saveLastRawSteps(lastRawSteps)
                     dataManager?.updateSteps(0)
+                    Log.d(TAG, "Initialized baseline steps: $baselineSteps")
                 } else {
                     // Calculate steps since last reading
                     val stepsSinceLastReading = (currentRawSteps - lastRawSteps).toInt()
@@ -209,6 +259,7 @@ class StepWaterForegroundService : Service(), SensorEventListener {
                         val currentSteps = dataManager?.getCurrentSteps() ?: 0
                         val newSteps = currentSteps + stepsSinceLastReading
                         dataManager?.updateSteps(newSteps)
+                        Log.d(TAG, "Steps updated: $currentSteps -> $newSteps (added $stepsSinceLastReading)")
                         updateNotification()
                     }
                     
@@ -217,7 +268,7 @@ class StepWaterForegroundService : Service(), SensorEventListener {
                 }
             } catch (e: Exception) {
                 // Handle any errors gracefully to prevent crashes
-                // Log error but don't crash the service
+                Log.e(TAG, "Error in onSensorChanged: ${e.message}", e)
             }
         }
     }
