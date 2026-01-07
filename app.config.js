@@ -1,3 +1,28 @@
+const fs = require('fs');
+const path = require('path');
+
+// Determine if we're in production mode
+const isProduction = process.env.NODE_ENV === 'production' || process.env.EAS_BUILD_PROFILE === 'production';
+
+// Check if Firebase config files exist
+const androidGoogleServicesPath = './android/app/google-services.json';
+const iosGoogleServicesPath = './ios/StepAndWaterApp/GoogleService-Info.plist';
+const hasAndroidGoogleServices = fs.existsSync(path.resolve(__dirname, androidGoogleServicesPath));
+const hasIosGoogleServices = fs.existsSync(path.resolve(__dirname, iosGoogleServicesPath));
+
+// AdMob App IDs
+// Test IDs for development, replace production IDs with your actual AdMob App IDs
+const ADMOB_APP_IDS = {
+  android: {
+    test: 'ca-app-pub-3940256099942544~3347511713',
+    production: 'ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY', // TODO: Replace with your Android App ID
+  },
+  ios: {
+    test: 'ca-app-pub-3940256099942544~1458002511',
+    production: 'ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY', // TODO: Replace with your iOS App ID
+  },
+};
+
 module.exports = {
   expo: {
     owner: "sultan2", // <-- ADD THIS LINE
@@ -22,19 +47,21 @@ module.exports = {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.stepwater.app",
+      bundleIdentifier: "com.myname.stepwater",
       infoPlist: {
         NSMotionUsageDescription: "We need access to motion data to track your steps.",
         NSHealthShareUsageDescription: "We need access to health data to track your activity.",
         NSHealthUpdateUsageDescription: "We need access to update health data with your activity."
-      }
+      },
+      // Firebase configuration for iOS (only if file exists)
+      ...(hasIosGoogleServices && { googleServicesFile: iosGoogleServicesPath }),
     },
     android: {
       adaptiveIcon: {
         backgroundColor: "#6366f1",
         foregroundImage: "./assets/icon.png" // Android adaptive icon foreground
       },
-      package: "com.stepwater.app",
+      package: "com.myname.stepwater",
       label: "Step & Water", // Explicit app label for Android
       versionCode: 1,
       permissions: [
@@ -48,19 +75,20 @@ module.exports = {
       ],
       // Android manifest configurations for foreground service
       // These ensure the foreground service works correctly in production builds
-      googleServicesFile: undefined, // Not using Firebase
-      // Foreground service configuration for production
-      intentFilters: [
-        {
-          action: "android.intent.action.MAIN",
-          category: ["android.intent.category.LAUNCHER"]
-        }
-      ],
+      // Firebase configuration for Android (only if file exists)
+      ...(hasAndroidGoogleServices && { googleServicesFile: androidGoogleServicesPath }),
       // Production build optimizations
       allowBackup: true
     },
     plugins: [
       "expo-notifications",
+      // react-native-iap configuration - specifies Google Play Store variant
+      [
+        "react-native-iap",
+        {
+          paymentProvider: "Play Store"
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -81,6 +109,25 @@ module.exports = {
             // iOS build optimizations
             deploymentTarget: "13.4"
           }
+        }
+      ],
+      // Google AdMob configuration
+      [
+        "react-native-google-mobile-ads",
+        {
+          // Android AdMob App ID (uses test ID in dev, production in release)
+          androidAppId: isProduction
+            ? ADMOB_APP_IDS.android.production
+            : ADMOB_APP_IDS.android.test,
+          // iOS AdMob App ID (uses test ID in dev, production in release)
+          iosAppId: isProduction
+            ? ADMOB_APP_IDS.ios.production
+            : ADMOB_APP_IDS.ios.test,
+          // Delay app measurement until explicit initialization (recommended)
+          delayAppMeasurementInit: true,
+          // User tracking description for iOS ATT prompt (required for iOS 14+)
+          userTrackingUsageDescription:
+            "This identifier will be used to deliver personalized ads to you.",
         }
       ],
       "./plugins/withStepWaterService.js"
