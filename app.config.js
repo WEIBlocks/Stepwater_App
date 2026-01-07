@@ -111,25 +111,7 @@ module.exports = {
           }
         }
       ],
-      // Google AdMob configuration
-      [
-        "react-native-google-mobile-ads",
-        {
-          // Android AdMob App ID (uses test ID in dev, production in release)
-          androidAppId: isProduction
-            ? ADMOB_APP_IDS.android.production
-            : ADMOB_APP_IDS.android.test,
-          // iOS AdMob App ID (uses test ID in dev, production in release)
-          iosAppId: isProduction
-            ? ADMOB_APP_IDS.ios.production
-            : ADMOB_APP_IDS.ios.test,
-          // Delay app measurement until explicit initialization (recommended)
-          delayAppMeasurementInit: true,
-          // User tracking description for iOS ATT prompt (required for iOS 14+)
-          userTrackingUsageDescription:
-            "This identifier will be used to deliver personalized ads to you.",
-        }
-      ],
+      // Note: react-native-google-mobile-ads v13.x config is in app.json (not via Expo plugin)
       "./plugins/withStepWaterService.js"
     ],
     // EAS project ID removed - not required for Expo Go
